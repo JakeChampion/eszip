@@ -1,4 +1,4 @@
-module github.com/example/eszip-go
+module github.com/JakeChampion/eszip
 
 go 1.21
 

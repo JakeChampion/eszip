@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	eszip "github.com/example/eszip-go"
+	eszip "github.com/JakeChampion/eszip"
 )
 
 func main() {

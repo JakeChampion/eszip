@@ -1,39 +1,68 @@
 # eszip
 
-The eszip format lets you losslessly serialize an ECMAScript module graph
-(represented by [`deno_graph::ModuleGraph`][module_graph]) into a single compact
-file.
+A Go library for serializing and deserializing ECMAScript module graphs into
+a compact binary format (eszip). The eszip format is designed to be compact and
+streaming-capable, allowing efficient storage and loading of large JavaScript
+and TypeScript module collections.
 
-The eszip file format is designed to be compact and streaming capable. This
-allows for efficient loading of large ECMAScript module graphs.
-
-https://eszip-viewer.deno.dev/ is a tool for inspecting eszip files.
-
-[module_graph]: https://docs.rs/deno_graph/latest/deno_graph/struct.ModuleGraph.html
-
-## Examples
-
-### Creating an eszip
+## Installation
 
 ```shell
-cargo run --example eszip_builder https://deno.land/std/http/file_server.ts file_server.eszip2
+go get github.com/JakeChampion/eszip
 ```
 
-### Viewing the contents of an eszip
+## Library usage
 
-```shell
-cargo run --example eszip_viewer file_server.eszip2
+### Parsing an eszip archive
+
+```go
+import (
+    "context"
+    "os"
+
+    "github.com/JakeChampion/eszip"
+)
+
+data, _ := os.ReadFile("archive.eszip2")
+archive, _ := eszip.ParseBytes(context.Background(), data)
+
+for _, spec := range archive.Specifiers() {
+    module := archive.GetModule(spec)
+    source, _ := module.Source(context.Background())
+    fmt.Printf("%s: %d bytes\n", spec, len(source))
+}
 ```
 
-### Loading the eszip into V8
+### Creating an eszip archive
+
+```go
+archive := eszip.NewV2()
+archive.SetChecksum(eszip.ChecksumSha256)
+archive.AddModule("file:///main.js", eszip.ModuleKindJavaScript, sourceBytes, nil)
+
+data, _ := archive.IntoBytes()
+os.WriteFile("output.eszip2", data, 0644)
+```
+
+## CLI tool
+
+Build the CLI:
 
 ```shell
-cargo run --example eszip_load file_server.eszip2 https://deno.land/std/http/file_server.ts
+go build -o eszip ./cmd/eszip
+```
+
+### Commands
+
+```
+eszip view archive.eszip2              # View contents
+eszip view -s file:///main.ts archive  # View specific module
+eszip extract -o ./output archive      # Extract to disk
+eszip create -o archive.eszip2 *.js    # Create from files
+eszip info archive.eszip2              # Show archive metadata
 ```
 
 ## File format
-
-The file format looks as follows:
 
 ```
 Eszip:
@@ -55,14 +84,9 @@ SourceMaps:
 ( | SourceMap (n) | Hash (32) | )*
 ```
 
-There is one optimization for empty source / source map entries. If both the
-offset and size are set to 0, no entry and no hash is present in the data
-sections for that module.
+If both the offset and size for a source or source map are 0, no entry and no
+hash is present in the data sections for that module.
 
-## Development
+## License
 
-When opening a PR make sure to rebuild Wasm by running:
-
-```
-deno task build
-```
+MIT

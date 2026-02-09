@@ -1,4 +1,4 @@
-module github.com/example/eszip-go
+module github.com/aspect-build/eszip
 
 go 1.21
 

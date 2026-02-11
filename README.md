@@ -57,9 +57,21 @@ go build -o eszip ./cmd/eszip
 ```
 eszip view archive.eszip2              # View contents
 eszip view -s file:///main.ts archive  # View specific module
+eszip view -m archive.eszip2           # View with source maps
 eszip extract -o ./output archive      # Extract to disk
+cat archive.eszip2 | eszip extract -o ./output  # Extract from stdin
 eszip create -o archive.eszip2 *.js    # Create from files
+eszip create --checksum xxhash3 -o archive.eszip2 *.js  # With checksum option
 eszip info archive.eszip2              # Show archive metadata
+```
+
+## Development
+
+```shell
+make test       # Run tests with race detection
+make lint       # Run golangci-lint
+make coverage   # Generate coverage report
+make ci         # Run lint + tests (CI pipeline)
 ```
 
 ## File format

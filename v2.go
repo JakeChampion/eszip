@@ -114,6 +114,7 @@ func (o Options) GetChecksumSize() uint8 {
 
 // EszipV2 represents a V2 eszip archive
 type EszipV2 struct {
+	mu          sync.Mutex
 	modules     *ModuleMap
 	npmSnapshot *NpmResolutionSnapshot
 	options     Options
@@ -191,6 +192,8 @@ func (e *EszipV2) Specifiers() []string {
 
 // TakeNpmSnapshot removes and returns the NPM snapshot
 func (e *EszipV2) TakeNpmSnapshot() *NpmResolutionSnapshot {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	snapshot := e.npmSnapshot
 	e.npmSnapshot = nil
 	return snapshot
@@ -198,6 +201,8 @@ func (e *EszipV2) TakeNpmSnapshot() *NpmResolutionSnapshot {
 
 // SetChecksum sets the checksum algorithm
 func (e *EszipV2) SetChecksum(checksum ChecksumType) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.options.Checksum = checksum
 	e.options.ChecksumSize = checksum.DigestSize()
 }

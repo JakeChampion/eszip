@@ -117,30 +117,3 @@ func (m *ModuleMap) Len() int {
 	return len(m.order)
 }
 
-// ModuleEntry represents a specifier-module pair for iteration
-type ModuleEntry struct {
-	Specifier string
-	Module    EszipV2Module
-}
-
-// Iterate returns a channel that yields all modules
-func (m *ModuleMap) Iterate() <-chan ModuleEntry {
-	ch := make(chan ModuleEntry)
-	go func() {
-		defer close(ch)
-		m.mu.RLock()
-		keys := make([]string, len(m.order))
-		copy(keys, m.order)
-		m.mu.RUnlock()
-
-		for _, key := range keys {
-			m.mu.RLock()
-			mod, ok := m.data[key]
-			m.mu.RUnlock()
-			if ok {
-				ch <- ModuleEntry{Specifier: key, Module: mod}
-			}
-		}
-	}()
-	return ch
-}

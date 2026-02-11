@@ -385,20 +385,19 @@ Show information about an eszip archive.`)
 }
 
 func loadArchive(ctx context.Context, path string) (*eszip.EszipUnion, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return nil, err
 	}
-
-	return eszip.ParseBytes(ctx, data)
+	defer f.Close()
+	return loadArchiveFromReader(ctx, f)
 }
 
 func loadArchiveFromReader(ctx context.Context, r io.Reader) (*eszip.EszipUnion, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read from stdin: %w", err)
+		return nil, fmt.Errorf("reading archive: %w", err)
 	}
-
 	return eszip.ParseBytes(ctx, data)
 }
 

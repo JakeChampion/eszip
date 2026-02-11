@@ -550,6 +550,12 @@ func TestExtractPathTraversal(t *testing.T) {
 	if _, err := os.Stat(escapePath); err == nil {
 		t.Fatal("path traversal: file was written outside output directory")
 	}
+
+	// Verify the legitimate file was extracted successfully
+	legitFiles := listFilesRecursive(t, extractDir)
+	if len(legitFiles) == 0 {
+		t.Fatal("expected at least one legitimate file to be extracted")
+	}
 }
 
 func TestSpecifierToPath(t *testing.T) {

@@ -223,7 +223,10 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				sourceMap, err := module.SourceMap(ctx)
 				if err == nil && len(sourceMap) > 0 {
 					mapPath := fullPath + ".map"
-					if err := os.WriteFile(mapPath, sourceMap, 0644); err == nil {
+					if err := os.WriteFile(mapPath, sourceMap, 0644); err != nil {
+						fmt.Fprintf(a.stderr, "Error writing source map: %v\n", err)
+						errCount++
+					} else {
 						fmt.Fprintf(a.stdout, "Extracted: %s\n", mapPath)
 					}
 				}

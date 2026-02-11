@@ -10,17 +10,24 @@ import (
 
 // IntoBytes serializes the eszip archive to bytes
 func (e *EszipV2) IntoBytes() ([]byte, error) {
-	checksum := e.options.Checksum
-	checksumSize := e.options.GetChecksumSize()
+	// Snapshot mutable fields under lock
+	e.mu.Lock()
+	options := e.options
+	version := e.version
+	npmSnapshot := e.npmSnapshot
+	e.mu.Unlock()
+
+	checksum := options.Checksum
+	checksumSize := options.GetChecksumSize()
 
 	var result []byte
 
 	// Write magic for the archive's version
-	magic := e.version.ToMagic()
+	magic := version.ToMagic()
 	result = append(result, magic[:]...)
 
 	// Write options header (V2.2+)
-	if e.version.SupportsOptions() {
+	if version.SupportsOptions() {
 		optionsHeaderContent := []byte{
 			0, byte(checksum), // Checksum type
 			1, checksumSize, // Checksum size
@@ -114,10 +121,10 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 
 	// Add npm snapshot entries if present (V2.1+)
 	var npmBytes []byte
-	if e.npmSnapshot != nil && e.version.SupportsNpm() {
+	if npmSnapshot != nil && version.SupportsNpm() {
 		// Sort packages by ID for determinism
-		packages := make([]*NpmPackage, len(e.npmSnapshot.Packages))
-		copy(packages, e.npmSnapshot.Packages)
+		packages := make([]*NpmPackage, len(npmSnapshot.Packages))
+		copy(packages, npmSnapshot.Packages)
 		sort.Slice(packages, func(i, j int) bool {
 			return packages[i].ID.String() < packages[j].ID.String()
 		})
@@ -132,8 +139,8 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 		rootPkgs := make([]struct {
 			req string
 			id  string
-		}, 0, len(e.npmSnapshot.RootPackages))
-		for req, id := range e.npmSnapshot.RootPackages {
+		}, 0, len(npmSnapshot.RootPackages))
+		for req, id := range npmSnapshot.RootPackages {
 			rootPkgs = append(rootPkgs, struct {
 				req string
 				id  string
@@ -191,7 +198,7 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 	result = append(result, modulesHash...)
 
 	// Write npm section (V2.1+)
-	if e.version.SupportsNpm() {
+	if version.SupportsNpm() {
 		npmLenBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(npmLenBytes, uint32(len(npmBytes)))
 		result = append(result, npmLenBytes...)

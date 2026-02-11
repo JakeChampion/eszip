@@ -3,6 +3,7 @@
 package eszip
 
 import (
+	"context"
 	"encoding/binary"
 	"sort"
 )
@@ -57,9 +58,9 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 			modulesHeader = append(modulesHeader, byte(HeaderFrameModule))
 
 			// Get source bytes
-			sourceBytes := m.Source.data
-			if sourceBytes == nil && m.Source.State() == SourceSlotReady {
-				sourceBytes = []byte{}
+			sourceBytes, err := m.Source.Get(context.Background())
+			if err != nil {
+				return nil, err
 			}
 			sourceLen := uint32(len(sourceBytes))
 
@@ -76,9 +77,9 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 			}
 
 			// Get source map bytes
-			sourceMapBytes := m.SourceMap.data
-			if sourceMapBytes == nil && m.SourceMap.State() == SourceSlotReady {
-				sourceMapBytes = []byte{}
+			sourceMapBytes, err := m.SourceMap.Get(context.Background())
+			if err != nil {
+				return nil, err
 			}
 			sourceMapLen := uint32(len(sourceMapBytes))
 

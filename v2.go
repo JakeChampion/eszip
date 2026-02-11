@@ -121,15 +121,6 @@ type EszipV2 struct {
 	version     EszipVersion
 }
 
-// NewEszipV2 creates a new empty V2 eszip
-func NewEszipV2() *EszipV2 {
-	return &EszipV2{
-		modules: NewModuleMap(),
-		options: DefaultOptionsForVersion(LatestVersion),
-		version: LatestVersion,
-	}
-}
-
 // HasMagic checks if the buffer starts with a V2 magic
 func HasMagic(buffer []byte) bool {
 	if len(buffer) < 8 {

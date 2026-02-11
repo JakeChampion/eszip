@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,6 +58,7 @@ Examples:
   eszip view archive.eszip2
   eszip view -s file:///main.ts archive.eszip2
   eszip extract -o ./output archive.eszip2
+  cat archive.eszip2 | eszip extract -o ./output
   eszip create -o archive.eszip2 file1.js file2.js
   eszip info archive.eszip2
 
@@ -137,24 +139,28 @@ func extractCmd(args []string) {
 	fs := flag.NewFlagSet("extract", flag.ExitOnError)
 	outputDir := fs.String("o", ".", "Output directory")
 	fs.Usage = func() {
-		fmt.Println(`Usage: eszip extract [options] <archive>
+		fmt.Println(`Usage: eszip extract [options] [<archive>]
 
 Extract files from an eszip archive.
+If no archive path is given (or "-" is specified), reads from stdin.
 
 Options:`)
 		fs.PrintDefaults()
 	}
 
 	fs.Parse(args)
-	if fs.NArg() < 1 {
-		fs.Usage()
-		os.Exit(1)
-	}
 
-	archivePath := fs.Arg(0)
 	ctx := context.Background()
 
-	archive, err := loadArchive(ctx, archivePath)
+	var archive *eszip.EszipUnion
+	var err error
+
+	archivePath := fs.Arg(0)
+	if archivePath == "" || archivePath == "-" {
+		archive, err = loadArchiveFromReader(ctx, os.Stdin)
+	} else {
+		archive, err = loadArchive(ctx, archivePath)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -380,6 +386,15 @@ func loadArchive(ctx context.Context, path string) (*eszip.EszipUnion, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return eszip.ParseBytes(ctx, data)
+}
+
+func loadArchiveFromReader(ctx context.Context, r io.Reader) (*eszip.EszipUnion, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read from stdin: %w", err)
 	}
 
 	return eszip.ParseBytes(ctx, data)

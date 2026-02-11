@@ -42,7 +42,7 @@ func ParseV2Sync(ctx context.Context, r io.Reader) (*EszipV2, error) {
 	return eszip, nil
 }
 
-func parseV2WithVersion(ctx context.Context, version EszipVersion, br *bufio.Reader) (*EszipV2, func(context.Context) error, error) {
+func parseV2WithVersion(_ context.Context, version EszipVersion, br *bufio.Reader) (*EszipV2, func(context.Context) error, error) {
 	supportsNpm := version.SupportsNpm()
 	supportsOptions := version.SupportsOptions()
 
@@ -353,7 +353,7 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 	return modules, npmSpecifiers, nil
 }
 
-func loadSources(ctx context.Context, br *bufio.Reader, eszip *EszipV2, options Options, sourceOffsets, sourceMapOffsets map[int]sourceOffsetEntry) error {
+func loadSources(_ context.Context, br *bufio.Reader, eszip *EszipV2, options Options, sourceOffsets, sourceMapOffsets map[int]sourceOffsetEntry) error {
 	getSlot := func(specifier string, isSourceMap bool) *SourceSlot {
 		mod, ok := eszip.modules.Get(specifier)
 		if !ok {
@@ -412,4 +412,3 @@ func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffset
 
 	return nil
 }
-

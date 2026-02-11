@@ -13,8 +13,8 @@ const eszipV1GraphVersion uint32 = 1
 
 // EszipV1 represents a V1 eszip archive (JSON format)
 type EszipV1 struct {
-	Version uint32                       `json:"version"`
-	Modules map[string]json.RawMessage   `json:"modules"`
+	Version uint32                     `json:"version"`
+	Modules map[string]json.RawMessage `json:"modules"`
 
 	// Internal parsed modules
 	mu            sync.RWMutex
@@ -38,8 +38,8 @@ type moduleSourceV1 struct {
 
 // v1ModuleInfoJSON is used for JSON unmarshaling
 type v1ModuleInfoJSON struct {
-	Redirect *string          `json:"Redirect"`
-	Source   *moduleSourceV1  `json:"Source"`
+	Redirect *string         `json:"Redirect"`
+	Source   *moduleSourceV1 `json:"Source"`
 }
 
 // ParseV1 parses a V1 eszip from JSON data

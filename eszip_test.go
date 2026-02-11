@@ -29,6 +29,7 @@ func TestParseV1(t *testing.T) {
 	module := eszip.GetModule(specifier)
 	if module == nil {
 		t.Fatalf("expected to find module: %s", specifier)
+		return
 	}
 
 	if module.Specifier != specifier {
@@ -73,6 +74,7 @@ func TestParseV2(t *testing.T) {
 	module := eszip.GetModule("file:///main.ts")
 	if module == nil {
 		t.Fatal("expected to find module: file:///main.ts")
+		return
 	}
 
 	if module.Kind != ModuleKindJavaScript {

@@ -2,3 +2,4 @@
 /eszip
 /cmd/eszip/eszip
 bin/tools/golangci-lint
+coverage.out

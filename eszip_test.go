@@ -129,8 +129,14 @@ func TestV2Redirect(t *testing.T) {
 		t.Fatal("expected to find module: file:///b.ts")
 	}
 
-	sourceA, _ := moduleA.Source(ctx)
-	sourceB, _ := moduleB.Source(ctx)
+	sourceA, err := moduleA.Source(ctx)
+	if err != nil {
+		t.Fatalf("failed to get source for a.ts: %v", err)
+	}
+	sourceB, err := moduleB.Source(ctx)
+	if err != nil {
+		t.Fatalf("failed to get source for b.ts: %v", err)
+	}
 
 	// Both should have the same source since a.ts redirects to b.ts
 	if !bytes.Equal(sourceA, sourceB) {
@@ -1737,6 +1743,8 @@ func TestParseV2InvalidEntryKind(t *testing.T) {
 		if pe.Type != ErrInvalidV2EntryKind {
 			t.Errorf("expected ErrInvalidV2EntryKind, got %v", pe.Type)
 		}
+	} else {
+		t.Errorf("expected *ParseError, got %T: %v", err, err)
 	}
 }
 
@@ -1771,5 +1779,7 @@ func TestParseV2InvalidModuleKind(t *testing.T) {
 		if pe.Type != ErrInvalidV2ModuleKind {
 			t.Errorf("expected ErrInvalidV2ModuleKind, got %v", pe.Type)
 		}
+	} else {
+		t.Errorf("expected *ParseError, got %T: %v", err, err)
 	}
 }

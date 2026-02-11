@@ -188,6 +188,10 @@ func parseOptionsHeader(br *bufio.Reader, defaults Options) (Options, error) {
 		return defaults, errInvalidV22OptionsHeader("checksum size must be known")
 	}
 
+	if options.Checksum == ChecksumNone && options.ChecksumSize > 0 {
+		return defaults, errInvalidV22OptionsHeader("checksum size must be 0 when checksum is none")
+	}
+
 	// If checksum is enabled, validate the options header hash
 	if options.GetChecksumSize() > 0 {
 		// Read the hash that follows

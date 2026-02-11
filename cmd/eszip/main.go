@@ -355,13 +355,13 @@ func (a *app) infoCmd() *cobra.Command {
 			fmt.Fprintf(a.stdout, "Modules: %d\n", len(specifiers))
 
 			kindCounts := make(map[eszip.ModuleKind]int)
-			redirectCount := 0
+			otherCount := 0
 			totalSourceSize := 0
 
 			for _, spec := range specifiers {
 				module := archive.GetModule(spec)
 				if module == nil {
-					redirectCount++
+					otherCount++
 					continue
 				}
 				kindCounts[module.Kind]++
@@ -378,8 +378,8 @@ func (a *app) infoCmd() *cobra.Command {
 			for kind, count := range kindCounts {
 				fmt.Fprintf(a.stdout, "  %s: %d\n", kind, count)
 			}
-			if redirectCount > 0 {
-				fmt.Fprintf(a.stdout, "  redirects: %d\n", redirectCount)
+			if otherCount > 0 {
+				fmt.Fprintf(a.stdout, "  other (redirects/npm): %d\n", otherCount)
 			}
 
 			fmt.Fprintf(a.stdout, "\nTotal source size: %d bytes\n", totalSourceSize)

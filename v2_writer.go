@@ -62,7 +62,9 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 		}
 
 		// Write specifier
-		appendString(&modulesHeader, specifier)
+		if err := appendString(&modulesHeader, specifier); err != nil {
+			return nil, err
+		}
 
 		switch m := mod.(type) {
 		case *ModuleData:
@@ -125,7 +127,9 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 		case *ModuleRedirect:
 			// Write redirect entry
 			modulesHeader = append(modulesHeader, byte(HeaderFrameRedirect))
-			appendString(&modulesHeader, m.Target)
+			if err := appendString(&modulesHeader, m.Target); err != nil {
+				return nil, err
+			}
 
 		case *NpmSpecifierEntry:
 			// Write npm specifier entry
@@ -137,6 +141,23 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 	// Add npm snapshot entries if present (V2.1+)
 	var npmBytes []byte
 	if npmSnapshot != nil && version.SupportsNpm() {
+		// Validate npm snapshot before serialization
+		for i, pkg := range npmSnapshot.Packages {
+			if pkg == nil || pkg.ID == nil {
+				return nil, fmt.Errorf("npm package at index %d has nil ID", i)
+			}
+			for req, depID := range pkg.Dependencies {
+				if depID == nil {
+					return nil, fmt.Errorf("npm package %q dependency %q has nil ID", pkg.ID.String(), req)
+				}
+			}
+		}
+		for req, id := range npmSnapshot.RootPackages {
+			if id == nil {
+				return nil, fmt.Errorf("npm root package %q has nil ID", req)
+			}
+		}
+
 		// Sort packages by ID for determinism
 		packages := make([]*NpmPackage, len(npmSnapshot.Packages))
 		copy(packages, npmSnapshot.Packages)
@@ -170,14 +191,18 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 			if !ok {
 				return nil, fmt.Errorf("npm root package %q references unknown package ID %q", rp.req, rp.id)
 			}
-			appendString(&modulesHeader, rp.req)
+			if err := appendString(&modulesHeader, rp.req); err != nil {
+				return nil, err
+			}
 			modulesHeader = append(modulesHeader, byte(HeaderFrameNpmSpecifier))
 			modulesHeader = appendU32BE(modulesHeader, idx)
 		}
 
 		// Write packages to npm bytes
 		for _, pkg := range packages {
-			appendString(&npmBytes, pkg.ID.String())
+			if err := appendString(&npmBytes, pkg.ID.String()); err != nil {
+				return nil, err
+			}
 
 			// Write dependencies count
 			npmBytes = appendU32BE(npmBytes, uint32(len(pkg.Dependencies)))
@@ -202,7 +227,9 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 				if !ok {
 					return nil, fmt.Errorf("npm package %q dependency %q references unknown package ID %q", pkg.ID.String(), dep.req, dep.id)
 				}
-				appendString(&npmBytes, dep.req)
+				if err := appendString(&npmBytes, dep.req); err != nil {
+					return nil, err
+				}
 				npmBytes = appendU32BE(npmBytes, idx)
 			}
 		}
@@ -256,9 +283,13 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 	return result, nil
 }
 
-func appendString(buf *[]byte, s string) {
+func appendString(buf *[]byte, s string) error {
+	if len(s) > math.MaxUint32 {
+		return fmt.Errorf("string too large: %d bytes", len(s))
+	}
 	*buf = binary.BigEndian.AppendUint32(*buf, uint32(len(s)))
 	*buf = append(*buf, s...)
+	return nil
 }
 
 func appendU32BE(buf []byte, v uint32) []byte {

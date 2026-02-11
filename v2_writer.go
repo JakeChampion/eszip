@@ -8,8 +8,9 @@ import (
 	"sort"
 )
 
-// IntoBytes serializes the eszip archive to bytes
-func (e *EszipV2) IntoBytes() ([]byte, error) {
+// IntoBytes serializes the eszip archive to bytes.
+// The context allows cancellation of source slot waits during serialization.
+func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 	// Snapshot mutable fields under lock
 	e.mu.Lock()
 	options := e.options
@@ -67,7 +68,7 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 			modulesHeader = append(modulesHeader, byte(HeaderFrameModule))
 
 			// Get source bytes
-			sourceBytes, err := m.Source.Get(context.Background())
+			sourceBytes, err := m.Source.Get(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -86,7 +87,7 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 			}
 
 			// Get source map bytes
-			sourceMapBytes, err := m.SourceMap.Get(context.Background())
+			sourceMapBytes, err := m.SourceMap.Get(ctx)
 			if err != nil {
 				return nil, err
 			}

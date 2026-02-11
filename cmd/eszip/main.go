@@ -241,7 +241,8 @@ func (a *app) createCmd() *cobra.Command {
 		Example: `  eszip create -o app.eszip2 main.js utils.js
   eszip create --checksum none -o app.eszip2 *.js`,
 		Args: cobra.MinimumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
 			archive := eszip.NewV2()
 
 			switch checksum {
@@ -280,7 +281,7 @@ func (a *app) createCmd() *cobra.Command {
 				fmt.Fprintf(a.stdout, "Added: %s\n", specifier)
 			}
 
-			data, err := archive.IntoBytes()
+			data, err := archive.IntoBytes(ctx)
 			if err != nil {
 				return fmt.Errorf("serializing archive: %w", err)
 			}

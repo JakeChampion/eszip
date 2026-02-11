@@ -413,10 +413,3 @@ func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffset
 	return nil
 }
 
-func readU32(r io.Reader) (uint32, error) {
-	buf := make([]byte, 4)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return 0, err
-	}
-	return binary.BigEndian.Uint32(buf), nil
-}

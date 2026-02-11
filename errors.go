@@ -59,10 +59,6 @@ func errInvalidV2HeaderHash() *ParseError {
 	return &ParseError{Type: ErrInvalidV2HeaderHash, Message: "invalid eszip v2 header hash"}
 }
 
-func errInvalidV2Specifier(offset int) *ParseError {
-	return &ParseError{Type: ErrInvalidV2Specifier, Message: "invalid specifier in eszip v2 header", Offset: offset}
-}
-
 func errInvalidV2EntryKind(kind uint8, offset int) *ParseError {
 	return &ParseError{Type: ErrInvalidV2EntryKind, Message: fmt.Sprintf("invalid entry kind %d in eszip v2 header", kind), Offset: offset}
 }

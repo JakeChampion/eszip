@@ -346,13 +346,6 @@ type NpmPackageIndex struct {
 	Index uint32
 }
 
-// parserState holds state during parsing
-type parserState struct {
-	mu             sync.Mutex
-	sourceOffsets  map[int]sourceOffsetEntry
-	sourceMapOffsets map[int]sourceOffsetEntry
-}
-
 type sourceOffsetEntry struct {
 	length    int
 	specifier string

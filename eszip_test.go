@@ -406,7 +406,11 @@ func TestV2Iterator(t *testing.T) {
 		t.Fatalf("failed to parse eszip: %v", err)
 	}
 
-	modules := parsed.V2().Iterate()
+	v2, ok := parsed.V2()
+	if !ok {
+		t.Fatal("expected V2 eszip")
+	}
+	modules := v2.Iterate()
 	// Should have 3 modules but only 2 are actual modules (one is redirect)
 	if len(modules) < 2 {
 		t.Errorf("expected at least 2 modules, got %d", len(modules))

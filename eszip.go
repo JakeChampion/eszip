@@ -27,20 +27,14 @@ func (e *EszipUnion) IsV2() bool {
 	return e.v2 != nil
 }
 
-// V1 returns the V1 archive (panics if not V1)
-func (e *EszipUnion) V1() *EszipV1 {
-	if e.v1 == nil {
-		panic("not a V1 eszip")
-	}
-	return e.v1
+// V1 returns the V1 archive, or nil and false if not V1
+func (e *EszipUnion) V1() (*EszipV1, bool) {
+	return e.v1, e.v1 != nil
 }
 
-// V2 returns the V2 archive (panics if not V2)
-func (e *EszipUnion) V2() *EszipV2 {
-	if e.v2 == nil {
-		panic("not a V2 eszip")
-	}
-	return e.v2
+// V2 returns the V2 archive, or nil and false if not V2
+func (e *EszipUnion) V2() (*EszipV2, bool) {
+	return e.v2, e.v2 != nil
 }
 
 // GetModule returns the module for the given specifier

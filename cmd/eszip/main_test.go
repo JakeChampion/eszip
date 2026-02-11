@@ -286,6 +286,178 @@ func TestRunErrors(t *testing.T) {
 	})
 }
 
+func TestCreateJsonFile(t *testing.T) {
+	outDir := t.TempDir()
+	outputPath := filepath.Join(outDir, "test.eszip2")
+
+	jsonFile := filepath.Join(outDir, "config.json")
+	if err := os.WriteFile(jsonFile, []byte(`{"key":"value"}`), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	a, stdout := newTestApp()
+	if err := a.run([]string{"create", "-o", outputPath, jsonFile}); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Added:") {
+		t.Error("expected 'Added:' in output")
+	}
+
+	info, err := os.Stat(outputPath)
+	if err != nil {
+		t.Fatalf("output file not found: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("output file is empty")
+	}
+}
+
+func TestCreateWasmFile(t *testing.T) {
+	outDir := t.TempDir()
+	outputPath := filepath.Join(outDir, "test.eszip2")
+
+	wasmFile := filepath.Join(outDir, "module.wasm")
+	// Minimal wasm magic bytes
+	if err := os.WriteFile(wasmFile, []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}, 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	a, stdout := newTestApp()
+	if err := a.run([]string{"create", "-o", outputPath, wasmFile}); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Added:") {
+		t.Error("expected 'Added:' in output")
+	}
+}
+
+func TestCreateMultipleFiles(t *testing.T) {
+	outDir := t.TempDir()
+	outputPath := filepath.Join(outDir, "test.eszip2")
+
+	jsFile := filepath.Join(outDir, "main.js")
+	jsonFile := filepath.Join(outDir, "data.json")
+	wasmFile := filepath.Join(outDir, "mod.wasm")
+
+	if err := os.WriteFile(jsFile, []byte("console.log('hi')"), 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+	if err := os.WriteFile(jsonFile, []byte(`{"a":1}`), 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+	if err := os.WriteFile(wasmFile, []byte{0x00, 0x61, 0x73, 0x6d}, 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+
+	a, stdout := newTestApp()
+	if err := a.run([]string{"create", "-o", outputPath, jsFile, jsonFile, wasmFile}); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	out := stdout.String()
+	if strings.Count(out, "Added:") != 3 {
+		t.Errorf("expected 3 'Added:' lines, got %d", strings.Count(out, "Added:"))
+	}
+	if !strings.Contains(out, "Created:") {
+		t.Error("expected 'Created:' in output")
+	}
+}
+
+func TestCreateInvalidChecksum(t *testing.T) {
+	outDir := t.TempDir()
+	jsFile := filepath.Join(outDir, "test.js")
+	if err := os.WriteFile(jsFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+
+	a, _ := newTestApp()
+	err := a.run([]string{"create", "--checksum", "invalid", "-o", filepath.Join(outDir, "out.eszip2"), jsFile})
+	if err == nil {
+		t.Fatal("expected error for invalid checksum")
+	}
+}
+
+func TestCreateNonexistentInput(t *testing.T) {
+	a, _ := newTestApp()
+	err := a.run([]string{"create", "-o", "/tmp/out.eszip2", "/nonexistent/file.js"})
+	if err == nil {
+		t.Fatal("expected error for nonexistent input file")
+	}
+}
+
+func TestViewNonexistentFile(t *testing.T) {
+	a, _ := newTestApp()
+	err := a.run([]string{"view", "/nonexistent/archive.eszip2"})
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestInfoNonexistentFile(t *testing.T) {
+	a, _ := newTestApp()
+	err := a.run([]string{"info", "/nonexistent/archive.eszip2"})
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestViewFilterNonexistentSpecifier(t *testing.T) {
+	a, stdout := newTestApp()
+	if err := a.run([]string{"view", "-s", "file:///nonexistent.ts", testdataPath(t, "redirect.eszip2")}); err != nil {
+		t.Fatalf("view failed: %v", err)
+	}
+	// Should produce no output for nonexistent specifier
+	if strings.Contains(stdout.String(), "Specifier:") {
+		t.Error("expected no specifier output for nonexistent filter")
+	}
+}
+
+func TestCreateThenExtractRoundtrip(t *testing.T) {
+	outDir := t.TempDir()
+	archivePath := filepath.Join(outDir, "roundtrip.eszip2")
+	extractDir := filepath.Join(outDir, "extracted")
+
+	jsFile := filepath.Join(outDir, "hello.js")
+	content := []byte("console.log('roundtrip test');\n")
+	if err := os.WriteFile(jsFile, content, 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+
+	// Create
+	a, _ := newTestApp()
+	if err := a.run([]string{"create", "-o", archivePath, jsFile}); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Extract
+	a2, _ := newTestApp()
+	if err := a2.run([]string{"extract", "-o", extractDir, archivePath}); err != nil {
+		t.Fatalf("extract failed: %v", err)
+	}
+
+	// Verify files were extracted
+	files := listFilesRecursive(t, extractDir)
+	if len(files) == 0 {
+		t.Fatal("expected extracted files")
+	}
+
+	// Verify at least one file has correct content
+	found := false
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		if bytes.Equal(data, content) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected to find file with original content in extracted output")
+	}
+}
+
 func TestSpecifierToPath(t *testing.T) {
 	tests := []struct {
 		input string

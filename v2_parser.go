@@ -354,16 +354,42 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 }
 
 func loadSources(ctx context.Context, br *bufio.Reader, eszip *EszipV2, options Options, sourceOffsets, sourceMapOffsets map[int]sourceOffsetEntry) error {
-	// Read sources section
-	sourcesLenBytes := make([]byte, 4)
-	if _, err := io.ReadFull(br, sourcesLenBytes); err != nil {
+	getSlot := func(specifier string, isSourceMap bool) *SourceSlot {
+		mod, ok := eszip.modules.Get(specifier)
+		if !ok {
+			return nil
+		}
+		data, ok := mod.(*ModuleData)
+		if !ok {
+			return nil
+		}
+		if isSourceMap {
+			return data.SourceMap
+		}
+		return data.Source
+	}
+
+	if err := loadSection(br, options, sourceOffsets, func(specifier string) *SourceSlot {
+		return getSlot(specifier, false)
+	}); err != nil {
+		return err
+	}
+
+	return loadSection(br, options, sourceMapOffsets, func(specifier string) *SourceSlot {
+		return getSlot(specifier, true)
+	})
+}
+
+func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffsetEntry, slotFor func(string) *SourceSlot) error {
+	lenBytes := make([]byte, 4)
+	if _, err := io.ReadFull(br, lenBytes); err != nil {
 		return errIO(err)
 	}
-	sourcesLen := int(binary.BigEndian.Uint32(sourcesLenBytes))
+	totalLen := int(binary.BigEndian.Uint32(lenBytes))
 
 	read := 0
-	for read < sourcesLen {
-		entry, ok := sourceOffsets[read]
+	for read < totalLen {
+		entry, ok := offsets[read]
 		if !ok {
 			return errInvalidV2SourceOffset(read)
 		}
@@ -379,57 +405,9 @@ func loadSources(ctx context.Context, br *bufio.Reader, eszip *EszipV2, options 
 
 		read += section.TotalLen()
 
-		// Update the module's source slot
-		mod, ok := eszip.modules.Get(entry.specifier)
-		if !ok {
-			continue
+		if slot := slotFor(entry.specifier); slot != nil {
+			slot.SetReady(section.IntoContent())
 		}
-
-		data, ok := mod.(*ModuleData)
-		if !ok {
-			continue
-		}
-
-		data.Source.SetReady(section.IntoContent())
-	}
-
-	// Read source maps section
-	sourceMapsLenBytes := make([]byte, 4)
-	if _, err := io.ReadFull(br, sourceMapsLenBytes); err != nil {
-		return errIO(err)
-	}
-	sourceMapsLen := int(binary.BigEndian.Uint32(sourceMapsLenBytes))
-
-	read = 0
-	for read < sourceMapsLen {
-		entry, ok := sourceMapOffsets[read]
-		if !ok {
-			return errInvalidV2SourceOffset(read)
-		}
-
-		section, err := readSectionWithSize(br, options, entry.length)
-		if err != nil {
-			return err
-		}
-
-		if !section.IsChecksumValid() {
-			return errInvalidV2SourceHash(entry.specifier)
-		}
-
-		read += section.TotalLen()
-
-		// Update the module's source map slot
-		mod, ok := eszip.modules.Get(entry.specifier)
-		if !ok {
-			continue
-		}
-
-		data, ok := mod.(*ModuleData)
-		if !ok {
-			continue
-		}
-
-		data.SourceMap.SetReady(section.IntoContent())
 	}
 
 	return nil

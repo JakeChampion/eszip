@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -506,7 +507,7 @@ func TestExtractPathTraversal(t *testing.T) {
 	archive := eszip.NewV2()
 	archive.AddModule("file:///legit.js", eszip.ModuleKindJavaScript, []byte("ok"), nil)
 	archive.AddModule("file:///foo/../../escape.js", eszip.ModuleKindJavaScript, []byte("escaped"), nil)
-	data, err := archive.IntoBytes()
+	data, err := archive.IntoBytes(context.Background())
 	if err != nil {
 		t.Fatalf("IntoBytes failed: %v", err)
 	}

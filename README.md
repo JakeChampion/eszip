@@ -40,7 +40,7 @@ archive := eszip.NewV2()
 archive.SetChecksum(eszip.ChecksumSha256)
 archive.AddModule("file:///main.js", eszip.ModuleKindJavaScript, sourceBytes, nil)
 
-data, _ := archive.IntoBytes()
+data, _ := archive.IntoBytes(ctx)
 os.WriteFile("output.eszip2", data, 0644)
 ```
 

@@ -264,60 +264,44 @@ type v2ModuleInner struct {
 	eszip *EszipV2
 }
 
-func (v *v2ModuleInner) getSource(ctx context.Context, specifier string) ([]byte, error) {
+func (v *v2ModuleInner) moduleData(specifier string) *ModuleData {
 	mod, ok := v.eszip.modules.Get(specifier)
 	if !ok {
-		return nil, nil
+		return nil
 	}
-
 	data, ok := mod.(*ModuleData)
 	if !ok {
-		return nil, nil
+		return nil
 	}
+	return data
+}
 
-	return data.Source.Get(ctx)
+func (v *v2ModuleInner) getSource(ctx context.Context, specifier string) ([]byte, error) {
+	if data := v.moduleData(specifier); data != nil {
+		return data.Source.Get(ctx)
+	}
+	return nil, nil
 }
 
 func (v *v2ModuleInner) takeSource(ctx context.Context, specifier string) ([]byte, error) {
-	mod, ok := v.eszip.modules.Get(specifier)
-	if !ok {
-		return nil, nil
+	if data := v.moduleData(specifier); data != nil {
+		return data.Source.Take(ctx)
 	}
-
-	data, ok := mod.(*ModuleData)
-	if !ok {
-		return nil, nil
-	}
-
-	return data.Source.Take(ctx)
+	return nil, nil
 }
 
 func (v *v2ModuleInner) getSourceMap(ctx context.Context, specifier string) ([]byte, error) {
-	mod, ok := v.eszip.modules.Get(specifier)
-	if !ok {
-		return nil, nil
+	if data := v.moduleData(specifier); data != nil {
+		return data.SourceMap.Get(ctx)
 	}
-
-	data, ok := mod.(*ModuleData)
-	if !ok {
-		return nil, nil
-	}
-
-	return data.SourceMap.Get(ctx)
+	return nil, nil
 }
 
 func (v *v2ModuleInner) takeSourceMap(ctx context.Context, specifier string) ([]byte, error) {
-	mod, ok := v.eszip.modules.Get(specifier)
-	if !ok {
-		return nil, nil
+	if data := v.moduleData(specifier); data != nil {
+		return data.SourceMap.Take(ctx)
 	}
-
-	data, ok := mod.(*ModuleData)
-	if !ok {
-		return nil, nil
-	}
-
-	return data.SourceMap.Take(ctx)
+	return nil, nil
 }
 
 // Section represents a parsed section with content and hash

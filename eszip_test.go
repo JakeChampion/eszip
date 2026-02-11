@@ -499,9 +499,10 @@ func TestParseV2CorruptHeaderHash(t *testing.T) {
 
 	// The options header hash starts after magic(8) + options_len(4) + options_content(4)
 	// = offset 16, and is 32 bytes. Corrupt it.
-	if len(data) > 48 {
-		data[16] ^= 0xff
+	if len(data) <= 48 {
+		t.Fatalf("archive too small to corrupt header hash: %d bytes", len(data))
 	}
+	data[16] ^= 0xff
 
 	_, err = ParseBytes(ctx, data)
 	if err == nil {
@@ -1733,9 +1734,10 @@ func TestParseV2InvalidEntryKind(t *testing.T) {
 	specLen := int(binary.BigEndian.Uint32(data[offset : offset+4]))
 	entryKindOffset := offset + 4 + specLen // after specifier_len + specifier
 
-	if entryKindOffset < len(data) {
-		data[entryKindOffset] = 99 // Invalid entry kind
+	if entryKindOffset >= len(data) {
+		t.Fatalf("archive too small to corrupt entry kind at offset %d: %d bytes", entryKindOffset, len(data))
 	}
+	data[entryKindOffset] = 99 // Invalid entry kind
 
 	_, err = ParseBytes(ctx, data)
 	if err == nil {
@@ -1769,9 +1771,10 @@ func TestParseV2InvalidModuleKind(t *testing.T) {
 	specLen := int(binary.BigEndian.Uint32(data[offset : offset+4]))
 	moduleKindOffset := offset + 4 + specLen + 1 + 16 // +1 entry_kind, +16 (4x uint32)
 
-	if moduleKindOffset < len(data) {
-		data[moduleKindOffset] = 99 // Invalid module kind
+	if moduleKindOffset >= len(data) {
+		t.Fatalf("archive too small to corrupt module kind at offset %d: %d bytes", moduleKindOffset, len(data))
 	}
+	data[moduleKindOffset] = 99 // Invalid module kind
 
 	_, err = ParseBytes(ctx, data)
 	if err == nil {

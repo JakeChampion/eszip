@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -257,7 +258,7 @@ func (a *app) createCmd() *cobra.Command {
 					kind = eszip.ModuleKindWasm
 				}
 
-				specifier := "file://" + absPath
+				specifier := (&url.URL{Scheme: "file", Path: absPath}).String()
 				archive.AddModule(specifier, kind, content, nil)
 				fmt.Fprintf(a.stdout, "Added: %s\n", specifier)
 			}

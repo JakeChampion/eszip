@@ -5,6 +5,7 @@ package eszip
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 
 	"github.com/zeebo/xxh3"
 )
@@ -42,17 +43,9 @@ func (c ChecksumType) Hash(data []byte) []byte {
 		return h[:]
 	case ChecksumXxh3:
 		h := xxh3.Hash(data)
-		// Convert to big-endian bytes
-		return []byte{
-			byte(h >> 56),
-			byte(h >> 48),
-			byte(h >> 40),
-			byte(h >> 32),
-			byte(h >> 24),
-			byte(h >> 16),
-			byte(h >> 8),
-			byte(h),
-		}
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], h)
+		return buf[:]
 	default:
 		return nil
 	}

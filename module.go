@@ -116,10 +116,14 @@ func NewEmptySourceSlot() *SourceSlot {
 	return NewReadySourceSlot([]byte{})
 }
 
-// SetReady marks the slot as ready with the given data
+// SetReady marks the slot as ready with the given data.
+// It is a no-op if the slot is already ready or taken.
 func (s *SourceSlot) SetReady(data []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.state != SourceSlotPending {
+		return
+	}
 	s.data = data
 	s.state = SourceSlotReady
 	close(s.waitCh)

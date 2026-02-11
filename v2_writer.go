@@ -211,14 +211,10 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 }
 
 func appendString(buf *[]byte, s string) {
-	lenBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenBytes, uint32(len(s)))
-	*buf = append(*buf, lenBytes...)
-	*buf = append(*buf, []byte(s)...)
+	*buf = binary.BigEndian.AppendUint32(*buf, uint32(len(s)))
+	*buf = append(*buf, s...)
 }
 
 func appendU32BE(buf []byte, v uint32) []byte {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, v)
-	return append(buf, b...)
+	return binary.BigEndian.AppendUint32(buf, v)
 }

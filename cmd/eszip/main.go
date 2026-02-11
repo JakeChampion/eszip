@@ -343,7 +343,7 @@ func (a *app) infoCmd() *cobra.Command {
 			fmt.Fprintf(a.stdout, "\nTotal source size: %d bytes\n", totalSourceSize)
 
 			if v2, ok := archive.V2(); ok {
-				snapshot := v2.TakeNpmSnapshot()
+				snapshot := v2.NpmSnapshot()
 				if snapshot != nil {
 					fmt.Fprintf(a.stdout, "\nNPM packages: %d\n", len(snapshot.Packages))
 					fmt.Fprintf(a.stdout, "NPM root packages: %d\n", len(snapshot.RootPackages))

@@ -223,7 +223,14 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				sourceMap, err := module.SourceMap(ctx)
 				if err == nil && len(sourceMap) > 0 {
 					mapPath := fullPath + ".map"
-					if err := os.WriteFile(mapPath, sourceMap, 0644); err != nil {
+					absMap, err := filepath.Abs(mapPath)
+					if err != nil {
+						fmt.Fprintf(a.stderr, "Error resolving source map path: %v\n", err)
+						errCount++
+					} else if !strings.HasPrefix(absMap, absOut+string(filepath.Separator)) && absMap != absOut {
+						fmt.Fprintf(a.stderr, "Skipping source map for %s: path escapes output directory\n", spec)
+						errCount++
+					} else if err := os.WriteFile(mapPath, sourceMap, 0644); err != nil {
 						fmt.Fprintf(a.stderr, "Error writing source map: %v\n", err)
 						errCount++
 					} else {

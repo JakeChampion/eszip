@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	eszip "github.com/JakeChampion/eszip"
+	"github.com/JakeChampion/eszip"
 )
 
 func main() {

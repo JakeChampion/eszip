@@ -11,24 +11,6 @@ import (
 	"io"
 )
 
-// Eszip is the unified interface for V1 and V2 eszip archives
-type Eszip interface {
-	// GetModule returns the module for the given specifier, following redirects.
-	// Returns nil if not found or if the module is JSONC (use GetImportMap instead).
-	GetModule(specifier string) *Module
-
-	// GetImportMap returns the import map module for the given specifier.
-	// Unlike GetModule, this can return JSONC modules.
-	GetImportMap(specifier string) *Module
-
-	// Specifiers returns all module specifiers in the archive.
-	Specifiers() []string
-
-	// TakeNpmSnapshot removes and returns the NPM resolution snapshot.
-	// Returns nil for V1 archives or if already taken.
-	TakeNpmSnapshot() *NpmResolutionSnapshot
-}
-
 // EszipUnion wraps either V1 or V2 eszip
 type EszipUnion struct {
 	v1 *EszipV1

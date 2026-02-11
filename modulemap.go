@@ -84,13 +84,6 @@ func (m *ModuleMap) Get(specifier string) (EszipV2Module, bool) {
 	return mod, ok
 }
 
-// GetMut retrieves a module for mutation (returns the pointer)
-func (m *ModuleMap) GetMut(specifier string) EszipV2Module {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.data[specifier]
-}
-
 // Remove removes a module and returns it
 func (m *ModuleMap) Remove(specifier string) (EszipV2Module, bool) {
 	m.mu.Lock()

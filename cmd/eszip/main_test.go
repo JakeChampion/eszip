@@ -518,8 +518,14 @@ func TestExtractPathTraversal(t *testing.T) {
 	// Extract into a nested dir so escape would land in outDir
 	extractDir := filepath.Join(outDir, "extracted")
 	a2, stderr := newTestAppWithStderr()
-	if err := a2.run([]string{"extract", "-o", extractDir, archivePath}); err != nil {
-		t.Fatalf("extract failed: %v", err)
+	err = a2.run([]string{"extract", "-o", extractDir, archivePath})
+
+	// Should return an error reporting partial failure
+	if err == nil {
+		t.Fatal("expected error for path traversal")
+	}
+	if !strings.Contains(err.Error(), "error(s)") {
+		t.Errorf("expected error count in message, got: %v", err)
 	}
 
 	// The traversal specifier should have been skipped

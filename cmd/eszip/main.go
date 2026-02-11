@@ -161,6 +161,7 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				return err
 			}
 
+			var errCount int
 			for _, spec := range archive.Specifiers() {
 				module := archive.GetModule(spec)
 				if module == nil {
@@ -174,6 +175,7 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				source, err := module.Source(ctx)
 				if err != nil {
 					fmt.Fprintf(a.stderr, "Error getting source for %s: %v\n", spec, err)
+					errCount++
 					continue
 				}
 
@@ -189,25 +191,30 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				absOut, err := filepath.Abs(outputDir)
 				if err != nil {
 					fmt.Fprintf(a.stderr, "Error resolving output dir: %v\n", err)
+					errCount++
 					continue
 				}
 				absFull, err := filepath.Abs(fullPath)
 				if err != nil {
 					fmt.Fprintf(a.stderr, "Error resolving path: %v\n", err)
+					errCount++
 					continue
 				}
 				if !strings.HasPrefix(absFull, absOut+string(filepath.Separator)) && absFull != absOut {
 					fmt.Fprintf(a.stderr, "Skipping %s: path escapes output directory\n", spec)
+					errCount++
 					continue
 				}
 
 				if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 					fmt.Fprintf(a.stderr, "Error creating directory: %v\n", err)
+					errCount++
 					continue
 				}
 
 				if err := os.WriteFile(fullPath, source, 0644); err != nil {
 					fmt.Fprintf(a.stderr, "Error writing file: %v\n", err)
+					errCount++
 					continue
 				}
 
@@ -220,6 +227,9 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 						fmt.Fprintf(a.stdout, "Extracted: %s\n", mapPath)
 					}
 				}
+			}
+			if errCount > 0 {
+				return fmt.Errorf("extraction completed with %d error(s)", errCount)
 			}
 			return nil
 		},

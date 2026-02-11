@@ -1,6 +1,6 @@
 module github.com/JakeChampion/eszip
 
-go 1.21
+go 1.23
 
 require github.com/zeebo/xxh3 v1.0.2
 

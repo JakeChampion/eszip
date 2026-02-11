@@ -2,33 +2,11 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-var binary string
-
-func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "eszip-cli-test")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
-		os.Exit(1)
-	}
-	defer os.RemoveAll(dir)
-
-	binary = filepath.Join(dir, "eszip")
-	out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to build binary: %v\n%s\n", err, out)
-		os.Exit(1)
-	}
-
-	os.Exit(m.Run())
-}
 
 func projectRoot(t *testing.T) string {
 	t.Helper()
@@ -44,17 +22,21 @@ func testdataPath(t *testing.T, name string) string {
 	return filepath.Join(projectRoot(t), "testdata", name)
 }
 
-func execBinary(t *testing.T, args []string, stdin []byte) (stdout, stderr string, err error) {
-	t.Helper()
-	cmd := exec.Command(binary, args...)
-	if stdin != nil {
-		cmd.Stdin = bytes.NewReader(stdin)
-	}
-	var outBuf, errBuf strings.Builder
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-	err = cmd.Run()
-	return outBuf.String(), errBuf.String(), err
+func newTestApp() (*app, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	return &app{stdout: &stdout, stderr: &stderr, stdin: strings.NewReader("")}, &stdout
+}
+
+func newTestAppWithStdin(stdin []byte) (*app, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	return &app{stdout: &stdout, stderr: &stderr, stdin: bytes.NewReader(stdin)}, &stdout
+}
+
+// run executes the CLI with the given args and returns an error if the command fails.
+func (a *app) run(args []string) error {
+	cmd := a.rootCmd()
+	cmd.SetArgs(args)
+	return cmd.Execute()
 }
 
 func listFilesRecursive(t *testing.T, dir string) []string {
@@ -94,19 +76,28 @@ func TestExtract(t *testing.T) {
 		{"stdin_dash", []string{"-"}, archiveData},
 	}
 
-	// Create output dirs at parent scope so they survive across subtests.
 	dirs := make([]string, len(tests))
 	for i := range tests {
 		dirs[i] = t.TempDir()
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := append([]string{"extract", "-o", dirs[i]}, tt.args...)
-			stdout, stderr, err := execBinary(t, args, tt.stdin)
-			if err != nil {
-				t.Fatalf("extract failed: %v\nstderr: %s", err, stderr)
+			args := []string{"extract", "-o", dirs[i]}
+			args = append(args, tt.args...)
+
+			var a *app
+			var stdout *bytes.Buffer
+			if tt.stdin != nil {
+				a, stdout = newTestAppWithStdin(tt.stdin)
+			} else {
+				a, stdout = newTestApp()
 			}
-			if !strings.Contains(stdout, "Extracted:") {
+
+			if err := a.run(args); err != nil {
+				t.Fatalf("extract failed: %v", err)
+			}
+
+			if !strings.Contains(stdout.String(), "Extracted:") {
 				t.Error("expected 'Extracted:' in stdout")
 			}
 
@@ -126,7 +117,6 @@ func TestExtract(t *testing.T) {
 		})
 	}
 
-	// All input modes should produce identical output.
 	t.Run("all_modes_match", func(t *testing.T) {
 		refFiles := listFilesRecursive(t, dirs[0])
 		for _, dir := range dirs[1:] {
@@ -152,45 +142,75 @@ func TestExtract(t *testing.T) {
 }
 
 func TestExtractErrors(t *testing.T) {
-	tests := []struct {
-		name  string
-		args  []string
-		stdin []byte
-	}{
-		{"nonexistent_file", []string{"extract", "/nonexistent/archive.eszip2"}, nil},
-		{"invalid_stdin", []string{"extract"}, []byte("not a valid eszip")},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := execBinary(t, tt.args, tt.stdin)
-			if err == nil {
-				t.Fatal("expected non-zero exit")
-			}
-		})
-	}
+	t.Run("nonexistent_file", func(t *testing.T) {
+		a, _ := newTestApp()
+		err := a.run([]string{"extract", "/nonexistent/archive.eszip2"})
+		if err == nil {
+			t.Fatal("expected error for nonexistent file")
+		}
+	})
+
+	t.Run("invalid_stdin", func(t *testing.T) {
+		a, _ := newTestAppWithStdin([]byte("not a valid eszip"))
+		err := a.run([]string{"extract"})
+		if err == nil {
+			t.Fatal("expected error for invalid input")
+		}
+	})
 }
 
 func TestView(t *testing.T) {
-	stdout, stderr, err := execBinary(t, []string{"view", testdataPath(t, "redirect.eszip2")}, nil)
-	if err != nil {
-		t.Fatalf("view failed: %v\nstderr: %s", err, stderr)
+	a, stdout := newTestApp()
+	if err := a.run([]string{"view", testdataPath(t, "redirect.eszip2")}); err != nil {
+		t.Fatalf("view failed: %v", err)
 	}
 	for _, want := range []string{"Specifier:", "Kind:"} {
-		if !strings.Contains(stdout, want) {
+		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("expected %q in view output", want)
 		}
 	}
 }
 
+func TestViewWithSpecifier(t *testing.T) {
+	a, stdout := newTestApp()
+	if err := a.run([]string{"view", "-s", "file:///main.ts", testdataPath(t, "redirect.eszip2")}); err != nil {
+		t.Fatalf("view failed: %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "file:///main.ts") || !strings.Contains(out, "Specifier:") {
+		t.Error("expected filtered view output for file:///main.ts")
+	}
+}
+
+func TestViewWithSourceMap(t *testing.T) {
+	a, stdout := newTestApp()
+	if err := a.run([]string{"view", "-m", testdataPath(t, "redirect.eszip2")}); err != nil {
+		t.Fatalf("view failed: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Source Map") {
+		t.Error("expected source map in view output with -m flag")
+	}
+}
+
 func TestInfo(t *testing.T) {
-	stdout, stderr, err := execBinary(t, []string{"info", testdataPath(t, "redirect.eszip2")}, nil)
-	if err != nil {
-		t.Fatalf("info failed: %v\nstderr: %s", err, stderr)
+	a, stdout := newTestApp()
+	if err := a.run([]string{"info", testdataPath(t, "redirect.eszip2")}); err != nil {
+		t.Fatalf("info failed: %v", err)
 	}
 	for _, want := range []string{"Format:", "Modules:"} {
-		if !strings.Contains(stdout, want) {
+		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("expected %q in info output", want)
 		}
+	}
+}
+
+func TestInfoV1(t *testing.T) {
+	a, stdout := newTestApp()
+	if err := a.run([]string{"info", testdataPath(t, "basic.json")}); err != nil {
+		t.Fatalf("info failed: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "V1") {
+		t.Error("expected 'V1' in info output for JSON archive")
 	}
 }
 
@@ -203,11 +223,11 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	stdout, stderr, err := execBinary(t, []string{"create", "-o", outputPath, jsFile}, nil)
-	if err != nil {
-		t.Fatalf("create failed: %v\nstderr: %s", err, stderr)
+	a, stdout := newTestApp()
+	if err := a.run([]string{"create", "-o", outputPath, jsFile}); err != nil {
+		t.Fatalf("create failed: %v", err)
 	}
-	if !strings.Contains(stdout, "Created:") {
+	if !strings.Contains(stdout.String(), "Created:") {
 		t.Error("expected 'Created:' in output")
 	}
 
@@ -220,29 +240,68 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func TestHelp(t *testing.T) {
-	stdout, _, err := execBinary(t, []string{"help"}, nil)
-	if err != nil {
-		t.Fatalf("help failed: %v", err)
-	}
-	if !strings.Contains(stdout, "Usage:") {
-		t.Error("expected 'Usage:' in help output")
+func TestCreateChecksumOptions(t *testing.T) {
+	for _, cs := range []string{"none", "sha256", "xxhash3"} {
+		t.Run(cs, func(t *testing.T) {
+			outDir := t.TempDir()
+			outputPath := filepath.Join(outDir, "test.eszip2")
+
+			jsFile := filepath.Join(outDir, "hello.js")
+			if err := os.WriteFile(jsFile, []byte("test"), 0644); err != nil {
+				t.Fatalf("failed to write test file: %v", err)
+			}
+
+			a, _ := newTestApp()
+			if err := a.run([]string{"create", "--checksum", cs, "-o", outputPath, jsFile}); err != nil {
+				t.Fatalf("create with checksum %s failed: %v", cs, err)
+			}
+
+			info, err := os.Stat(outputPath)
+			if err != nil {
+				t.Fatalf("output file not found: %v", err)
+			}
+			if info.Size() == 0 {
+				t.Error("output file is empty")
+			}
+		})
 	}
 }
 
-func TestErrorCases(t *testing.T) {
+func TestHelp(t *testing.T) {
+	a, stdout := newTestApp()
+	if err := a.run([]string{"help"}); err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "eszip") {
+		t.Error("expected 'eszip' in help output")
+	}
+}
+
+func TestRunErrors(t *testing.T) {
+	t.Run("unknown_command", func(t *testing.T) {
+		a, _ := newTestApp()
+		if err := a.run([]string{"bogus"}); err == nil {
+			t.Fatal("expected error for unknown command")
+		}
+	})
+}
+
+func TestSpecifierToPath(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
+		input string
+		want  string
 	}{
-		{"unknown_command", []string{"bogus"}},
-		{"no_args", nil},
+		{"file:///main.ts", "main.ts"},
+		{"file://localhost/main.ts", "localhost/main.ts"},
+		{"https://example.com/mod.ts", "example.com/mod.ts"},
+		{"http://example.com/mod.ts", "example.com/mod.ts"},
+		{"plain/path.ts", "plain/path.ts"},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := execBinary(t, tt.args, nil)
-			if err == nil {
-				t.Fatal("expected non-zero exit")
+		t.Run(tt.input, func(t *testing.T) {
+			got := specifierToPath(tt.input)
+			if got != tt.want {
+				t.Errorf("specifierToPath(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

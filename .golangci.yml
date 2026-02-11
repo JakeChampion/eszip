@@ -17,6 +17,11 @@ linters:
     - unparam
     - unused
   settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
     exhaustive:
       default-signifies-exhaustive: true
     revive:

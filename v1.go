@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"sort"
 	"sync"
 )
 
@@ -118,7 +119,7 @@ func (e *EszipV1) GetImportMap(specifier string) *Module {
 	return nil
 }
 
-// Specifiers returns all module specifiers
+// Specifiers returns all module specifiers in sorted order
 func (e *EszipV1) Specifiers() []string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -127,6 +128,7 @@ func (e *EszipV1) Specifiers() []string {
 	for spec := range e.parsedModules {
 		specs = append(specs, spec)
 	}
+	sort.Strings(specs)
 	return specs
 }
 

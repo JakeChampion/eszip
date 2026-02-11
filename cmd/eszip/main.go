@@ -24,6 +24,7 @@ type app struct {
 func main() {
 	a := &app{stdout: os.Stdout, stderr: os.Stderr, stdin: os.Stdin}
 	if err := a.rootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -41,8 +42,13 @@ Examples:
   cat archive.eszip2 | eszip extract -o ./output
   eszip create -o archive.eszip2 file1.js file2.js
   eszip info archive.eszip2`,
-		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Show usage for flag/arg errors but not for runtime errors.
+		// PersistentPreRun fires after flag parsing succeeds, so any
+		// error returned by RunE will not print usage.
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			cmd.SilenceUsage = true
+		},
 	}
 
 	cmd.SetOut(a.stdout)

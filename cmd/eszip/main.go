@@ -16,28 +16,35 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	if len(os.Args) < 2 {
 		printUsage()
-		os.Exit(1)
+		return fmt.Errorf("no command specified")
 	}
 
 	command := os.Args[1]
 
 	switch command {
 	case "view", "v":
-		viewCmd(os.Args[2:])
+		return viewCmd(os.Args[2:])
 	case "extract", "x":
-		extractCmd(os.Args[2:])
+		return extractCmd(os.Args[2:])
 	case "create", "c":
-		createCmd(os.Args[2:])
+		return createCmd(os.Args[2:])
 	case "info", "i":
-		infoCmd(os.Args[2:])
+		return infoCmd(os.Args[2:])
 	case "help", "-h", "--help":
 		printUsage()
+		return nil
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
-		os.Exit(1)
+		return fmt.Errorf("unknown command: %s", command)
 	}
 }
 
@@ -66,7 +73,7 @@ Run 'eszip <command> -h' for more information on a command.`)
 }
 
 // viewCmd handles the 'view' command
-func viewCmd(args []string) {
+func viewCmd(args []string) error {
 	fs := flag.NewFlagSet("view", flag.ExitOnError)
 	specifier := fs.String("s", "", "Show only this specifier")
 	showSourceMap := fs.Bool("m", false, "Show source maps")
@@ -82,7 +89,7 @@ Options:`)
 	fs.Parse(args)
 	if fs.NArg() < 1 {
 		fs.Usage()
-		os.Exit(1)
+		return fmt.Errorf("archive path required")
 	}
 
 	archivePath := fs.Arg(0)
@@ -90,8 +97,7 @@ Options:`)
 
 	archive, err := loadArchive(ctx, archivePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	specifiers := archive.Specifiers()
@@ -132,10 +138,11 @@ Options:`)
 
 		fmt.Println("============")
 	}
+	return nil
 }
 
 // extractCmd handles the 'extract' command
-func extractCmd(args []string) {
+func extractCmd(args []string) error {
 	fs := flag.NewFlagSet("extract", flag.ExitOnError)
 	outputDir := fs.String("o", ".", "Output directory")
 	fs.Usage = func() {
@@ -162,8 +169,7 @@ Options:`)
 		archive, err = loadArchive(ctx, archivePath)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	specifiers := archive.Specifiers()
@@ -215,10 +221,11 @@ Options:`)
 			}
 		}
 	}
+	return nil
 }
 
 // createCmd handles the 'create' command
-func createCmd(args []string) {
+func createCmd(args []string) error {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 	outputPath := fs.String("o", "output.eszip2", "Output file path")
 	checksum := fs.String("checksum", "sha256", "Checksum algorithm (none, sha256, xxhash3)")
@@ -238,7 +245,7 @@ Examples:
 	fs.Parse(args)
 	if fs.NArg() < 1 {
 		fs.Usage()
-		os.Exit(1)
+		return fmt.Errorf("at least one file required")
 	}
 
 	archive := eszip.NewV2()
@@ -252,22 +259,19 @@ Examples:
 	case "xxhash3":
 		archive.SetChecksum(eszip.ChecksumXxh3)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown checksum: %s\n", *checksum)
-		os.Exit(1)
+		return fmt.Errorf("unknown checksum: %s", *checksum)
 	}
 
 	// Add files
 	for _, filePath := range fs.Args() {
 		absPath, err := filepath.Abs(filePath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error resolving path %s: %v\n", filePath, err)
-			os.Exit(1)
+			return fmt.Errorf("resolving path %s: %w", filePath, err)
 		}
 
 		content, err := os.ReadFile(absPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading file %s: %v\n", filePath, err)
-			os.Exit(1)
+			return fmt.Errorf("reading file %s: %w", filePath, err)
 		}
 
 		// Determine module kind
@@ -288,21 +292,20 @@ Examples:
 	// Serialize
 	data, err := archive.IntoBytes()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error serializing archive: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("serializing archive: %w", err)
 	}
 
 	// Write output
 	if err := os.WriteFile(*outputPath, data, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("writing output: %w", err)
 	}
 
 	fmt.Printf("Created: %s (%d bytes)\n", *outputPath, len(data))
+	return nil
 }
 
 // infoCmd handles the 'info' command
-func infoCmd(args []string) {
+func infoCmd(args []string) error {
 	fs := flag.NewFlagSet("info", flag.ExitOnError)
 	fs.Usage = func() {
 		fmt.Println(`Usage: eszip info <archive>
@@ -313,7 +316,7 @@ Show information about an eszip archive.`)
 	fs.Parse(args)
 	if fs.NArg() < 1 {
 		fs.Usage()
-		os.Exit(1)
+		return fmt.Errorf("archive path required")
 	}
 
 	archivePath := fs.Arg(0)
@@ -322,14 +325,12 @@ Show information about an eszip archive.`)
 	// Get file size
 	stat, err := os.Stat(archivePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	archive, err := loadArchive(ctx, archivePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	specifiers := archive.Specifiers()
@@ -380,6 +381,7 @@ Show information about an eszip archive.`)
 			fmt.Printf("NPM root packages: %d\n", len(snapshot.RootPackages))
 		}
 	}
+	return nil
 }
 
 func loadArchive(ctx context.Context, path string) (*eszip.EszipUnion, error) {

@@ -402,17 +402,13 @@ func loadArchiveFromReader(ctx context.Context, r io.Reader) (*eszip.EszipUnion,
 }
 
 func specifierToPath(specifier string) string {
-	// Remove protocol prefixes
 	path := specifier
 	for _, prefix := range []string{"file:///", "file://", "https://", "http://"} {
-		if strings.HasPrefix(path, prefix) {
-			path = strings.TrimPrefix(path, prefix)
+		if after, found := strings.CutPrefix(path, prefix); found {
+			path = after
 			break
 		}
 	}
-
-	// Clean the path
 	path = strings.TrimPrefix(path, "/")
-
 	return path
 }

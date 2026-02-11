@@ -399,7 +399,11 @@ func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffset
 	if _, err := io.ReadFull(br, lenBytes); err != nil {
 		return errIO(err)
 	}
-	totalLen := int(binary.BigEndian.Uint32(lenBytes))
+	totalLenU := binary.BigEndian.Uint32(lenBytes)
+	if totalLenU > maxSectionSize {
+		return errInvalidV2Header(fmt.Sprintf("source section too large: %d bytes", totalLenU))
+	}
+	totalLen := int(totalLenU)
 
 	read := 0
 	for read < totalLen {

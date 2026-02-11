@@ -12,7 +12,6 @@ const (
 	ErrInvalidV1Version
 	ErrInvalidV2
 	ErrInvalidV2HeaderHash
-	ErrInvalidV2Specifier
 	ErrInvalidV2EntryKind
 	ErrInvalidV2ModuleKind
 	ErrInvalidV2Header

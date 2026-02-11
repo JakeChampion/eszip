@@ -103,15 +103,25 @@ func parseV2WithVersion(_ context.Context, version EszipVersion, br *bufio.Reade
 		}
 
 		if data.Source.State() == SourceSlotPending && data.Source.Length() > 0 {
-			sourceOffsets[int(data.Source.Offset())] = sourceOffsetEntry{
-				length:    int(data.Source.Length()),
+			off := data.Source.Offset()
+			ln := data.Source.Length()
+			if off > maxSectionSize || ln > maxSectionSize {
+				return nil, nil, errInvalidV2Header(fmt.Sprintf("source offset/length out of range for %s", specifier))
+			}
+			sourceOffsets[int(off)] = sourceOffsetEntry{
+				length:    int(ln),
 				specifier: specifier,
 			}
 		}
 
 		if data.SourceMap.State() == SourceSlotPending && data.SourceMap.Length() > 0 {
-			sourceMapOffsets[int(data.SourceMap.Offset())] = sourceOffsetEntry{
-				length:    int(data.SourceMap.Length()),
+			off := data.SourceMap.Offset()
+			ln := data.SourceMap.Length()
+			if off > maxSectionSize || ln > maxSectionSize {
+				return nil, nil, errInvalidV2Header(fmt.Sprintf("source map offset/length out of range for %s", specifier))
+			}
+			sourceMapOffsets[int(off)] = sourceOffsetEntry{
+				length:    int(ln),
 				specifier: specifier,
 			}
 		}

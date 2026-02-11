@@ -133,14 +133,26 @@ func TestExtract(t *testing.T) {
 				t.Fatalf("file count mismatch: %d vs %d", len(refFiles), len(gotFiles))
 			}
 			for i, ref := range refFiles {
-				relRef, _ := filepath.Rel(dirs[0], ref)
-				relGot, _ := filepath.Rel(dir, gotFiles[i])
+				relRef, err := filepath.Rel(dirs[0], ref)
+				if err != nil {
+					t.Fatalf("filepath.Rel(%q, %q): %v", dirs[0], ref, err)
+				}
+				relGot, err := filepath.Rel(dir, gotFiles[i])
+				if err != nil {
+					t.Fatalf("filepath.Rel(%q, %q): %v", dir, gotFiles[i], err)
+				}
 				if relRef != relGot {
 					t.Errorf("path mismatch: %s vs %s", relRef, relGot)
 					continue
 				}
-				refContent, _ := os.ReadFile(ref)
-				gotContent, _ := os.ReadFile(gotFiles[i])
+				refContent, err := os.ReadFile(ref)
+				if err != nil {
+					t.Fatalf("reading %s: %v", ref, err)
+				}
+				gotContent, err := os.ReadFile(gotFiles[i])
+				if err != nil {
+					t.Fatalf("reading %s: %v", gotFiles[i], err)
+				}
 				if !bytes.Equal(refContent, gotContent) {
 					t.Errorf("content mismatch for %s", relRef)
 				}

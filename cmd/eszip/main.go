@@ -374,8 +374,8 @@ Show information about an eszip archive.`)
 	fmt.Printf("\nTotal source size: %d bytes\n", totalSourceSize)
 
 	// Check for npm snapshot
-	if archive.IsV2() {
-		snapshot := archive.V2().TakeNpmSnapshot()
+	if v2, ok := archive.V2(); ok {
+		snapshot := v2.TakeNpmSnapshot()
 		if snapshot != nil {
 			fmt.Printf("\nNPM packages: %d\n", len(snapshot.Packages))
 			fmt.Printf("NPM root packages: %d\n", len(snapshot.RootPackages))

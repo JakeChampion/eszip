@@ -6,8 +6,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 )
+
+// maxSectionSize is the maximum allowed size for any section (256 MB).
+// This prevents excessive memory allocation from malformed or malicious archives.
+const maxSectionSize = 256 << 20
 
 // ParseV2 parses a V2 eszip from a reader.
 // Returns the eszip and a completion function that loads sources in background.
@@ -188,6 +193,9 @@ func readSection(br *bufio.Reader, options Options) (*Section, error) {
 		return nil, errIO(err)
 	}
 	length := binary.BigEndian.Uint32(lengthBytes)
+	if length > maxSectionSize {
+		return nil, errInvalidV2Header(fmt.Sprintf("section too large: %d bytes", length))
+	}
 
 	// Read content
 	content := make([]byte, length)
@@ -213,6 +221,10 @@ func readSection(br *bufio.Reader, options Options) (*Section, error) {
 }
 
 func readSectionWithSize(br *bufio.Reader, options Options, contentLen int) (*Section, error) {
+	if contentLen > maxSectionSize {
+		return nil, errInvalidV2Header(fmt.Sprintf("section too large: %d bytes", contentLen))
+	}
+
 	// Read content
 	content := make([]byte, contentLen)
 	if _, err := io.ReadFull(br, content); err != nil {

@@ -184,6 +184,23 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				filePath := specifierToPath(spec)
 				fullPath := filepath.Join(outputDir, filePath)
 
+				// Guard against path traversal: ensure the resolved
+				// path stays inside the output directory.
+				absOut, err := filepath.Abs(outputDir)
+				if err != nil {
+					fmt.Fprintf(a.stderr, "Error resolving output dir: %v\n", err)
+					continue
+				}
+				absFull, err := filepath.Abs(fullPath)
+				if err != nil {
+					fmt.Fprintf(a.stderr, "Error resolving path: %v\n", err)
+					continue
+				}
+				if !strings.HasPrefix(absFull, absOut+string(filepath.Separator)) && absFull != absOut {
+					fmt.Fprintf(a.stderr, "Skipping %s: path escapes output directory\n", spec)
+					continue
+				}
+
 				if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 					fmt.Fprintf(a.stderr, "Error creating directory: %v\n", err)
 					continue

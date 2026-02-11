@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/JakeChampion/eszip"
 )
 
 func projectRoot(t *testing.T) string {
@@ -30,6 +32,11 @@ func newTestApp() (*app, *bytes.Buffer) {
 func newTestAppWithStdin(stdin []byte) (*app, *bytes.Buffer) {
 	var stdout, stderr bytes.Buffer
 	return &app{stdout: &stdout, stderr: &stderr, stdin: bytes.NewReader(stdin)}, &stdout
+}
+
+func newTestAppWithStderr() (*app, *bytes.Buffer) {
+	var stdout, stderr bytes.Buffer
+	return &app{stdout: &stdout, stderr: &stderr, stdin: strings.NewReader("")}, &stderr
 }
 
 // run executes the CLI with the given args and returns an error if the command fails.
@@ -475,6 +482,54 @@ func TestCreateThenExtractRoundtrip(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected to find file with original content in extracted output")
+	}
+}
+
+func TestExtractPathTraversal(t *testing.T) {
+	// Build a malicious archive with a ../escape specifier
+	outDir := t.TempDir()
+	archivePath := filepath.Join(outDir, "malicious.eszip2")
+
+	// Create archive with a path-traversal specifier
+	jsFile := filepath.Join(outDir, "legit.js")
+	if err := os.WriteFile(jsFile, []byte("ok"), 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+
+	a1, _ := newTestApp()
+	if err := a1.run([]string{"create", "-o", archivePath, jsFile}); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	// Now create an archive that contains a traversal specifier.
+	// We simulate this by using the library directly.
+	archive := eszip.NewV2()
+	archive.AddModule("file:///legit.js", eszip.ModuleKindJavaScript, []byte("ok"), nil)
+	archive.AddModule("file:///foo/../../escape.js", eszip.ModuleKindJavaScript, []byte("escaped"), nil)
+	data, err := archive.IntoBytes()
+	if err != nil {
+		t.Fatalf("IntoBytes failed: %v", err)
+	}
+	if err := os.WriteFile(archivePath, data, 0644); err != nil {
+		t.Fatalf("write archive failed: %v", err)
+	}
+
+	// Extract into a nested dir so escape would land in outDir
+	extractDir := filepath.Join(outDir, "extracted")
+	a2, stderr := newTestAppWithStderr()
+	if err := a2.run([]string{"extract", "-o", extractDir, archivePath}); err != nil {
+		t.Fatalf("extract failed: %v", err)
+	}
+
+	// The traversal specifier should have been skipped
+	if !strings.Contains(stderr.String(), "path escapes output directory") {
+		t.Error("expected path traversal warning on stderr")
+	}
+
+	// Verify no file was written outside extractDir
+	escapePath := filepath.Join(outDir, "escape.js")
+	if _, err := os.Stat(escapePath); err == nil {
+		t.Fatal("path traversal: file was written outside output directory")
 	}
 }
 

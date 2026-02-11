@@ -6,6 +6,7 @@ package eszip
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"io"
 )
@@ -151,22 +152,7 @@ func ParseSync(ctx context.Context, r io.Reader) (*EszipUnion, error) {
 
 // ParseBytes parses an eszip from a byte slice
 func ParseBytes(ctx context.Context, data []byte) (*EszipUnion, error) {
-	return ParseSync(ctx, &byteReader{data: data})
-}
-
-// byteReader wraps a byte slice as an io.Reader
-type byteReader struct {
-	data   []byte
-	offset int
-}
-
-func (r *byteReader) Read(p []byte) (n int, err error) {
-	if r.offset >= len(r.data) {
-		return 0, io.EOF
-	}
-	n = copy(p, r.data[r.offset:])
-	r.offset += n
-	return n, nil
+	return ParseSync(ctx, bytes.NewReader(data))
 }
 
 // NewV2 creates a new empty V2 eszip archive

@@ -150,5 +150,9 @@ func ParseBytes(ctx context.Context, data []byte) (*EszipUnion, error) {
 
 // NewV2 creates a new empty V2 eszip archive
 func NewV2() *EszipV2 {
-	return NewEszipV2()
+	return &EszipV2{
+		modules: NewModuleMap(),
+		options: DefaultOptionsForVersion(LatestVersion),
+		version: LatestVersion,
+	}
 }

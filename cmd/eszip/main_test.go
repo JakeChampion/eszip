@@ -44,7 +44,7 @@ func testdataPath(t *testing.T, name string) string {
 	return filepath.Join(projectRoot(t), "testdata", name)
 }
 
-func run(t *testing.T, args []string, stdin []byte) (stdout, stderr string, err error) {
+func execBinary(t *testing.T, args []string, stdin []byte) (stdout, stderr string, err error) {
 	t.Helper()
 	cmd := exec.Command(binary, args...)
 	if stdin != nil {
@@ -102,7 +102,7 @@ func TestExtract(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			args := append([]string{"extract", "-o", dirs[i]}, tt.args...)
-			stdout, stderr, err := run(t, args, tt.stdin)
+			stdout, stderr, err := execBinary(t, args, tt.stdin)
 			if err != nil {
 				t.Fatalf("extract failed: %v\nstderr: %s", err, stderr)
 			}
@@ -162,7 +162,7 @@ func TestExtractErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := run(t, tt.args, tt.stdin)
+			_, _, err := execBinary(t, tt.args, tt.stdin)
 			if err == nil {
 				t.Fatal("expected non-zero exit")
 			}
@@ -171,7 +171,7 @@ func TestExtractErrors(t *testing.T) {
 }
 
 func TestView(t *testing.T) {
-	stdout, stderr, err := run(t, []string{"view", testdataPath(t, "redirect.eszip2")}, nil)
+	stdout, stderr, err := execBinary(t, []string{"view", testdataPath(t, "redirect.eszip2")}, nil)
 	if err != nil {
 		t.Fatalf("view failed: %v\nstderr: %s", err, stderr)
 	}
@@ -183,7 +183,7 @@ func TestView(t *testing.T) {
 }
 
 func TestInfo(t *testing.T) {
-	stdout, stderr, err := run(t, []string{"info", testdataPath(t, "redirect.eszip2")}, nil)
+	stdout, stderr, err := execBinary(t, []string{"info", testdataPath(t, "redirect.eszip2")}, nil)
 	if err != nil {
 		t.Fatalf("info failed: %v\nstderr: %s", err, stderr)
 	}
@@ -203,7 +203,7 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	stdout, stderr, err := run(t, []string{"create", "-o", outputPath, jsFile}, nil)
+	stdout, stderr, err := execBinary(t, []string{"create", "-o", outputPath, jsFile}, nil)
 	if err != nil {
 		t.Fatalf("create failed: %v\nstderr: %s", err, stderr)
 	}
@@ -221,7 +221,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestHelp(t *testing.T) {
-	stdout, _, err := run(t, []string{"help"}, nil)
+	stdout, _, err := execBinary(t, []string{"help"}, nil)
 	if err != nil {
 		t.Fatalf("help failed: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestErrorCases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := run(t, tt.args, nil)
+			_, _, err := execBinary(t, tt.args, nil)
 			if err == nil {
 				t.Fatal("expected non-zero exit")
 			}

@@ -84,23 +84,6 @@ func (m *ModuleMap) Get(specifier string) (EszipV2Module, bool) {
 	return mod, ok
 }
 
-// Remove removes a module and returns it
-func (m *ModuleMap) Remove(specifier string) (EszipV2Module, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	mod, ok := m.data[specifier]
-	if ok {
-		delete(m.data, specifier)
-		for i, s := range m.order {
-			if s == specifier {
-				m.order = append(m.order[:i], m.order[i+1:]...)
-				break
-			}
-		}
-	}
-	return mod, ok
-}
-
 // Keys returns all specifiers in order
 func (m *ModuleMap) Keys() []string {
 	m.mu.RLock()

@@ -734,38 +734,6 @@ func TestModuleMapInsertFrontExisting(t *testing.T) {
 	}
 }
 
-func TestModuleMapRemove(t *testing.T) {
-	m := NewModuleMap()
-	m.Insert("a", &ModuleData{Kind: ModuleKindJavaScript})
-	m.Insert("b", &ModuleData{Kind: ModuleKindJson})
-	m.Insert("c", &ModuleData{Kind: ModuleKindWasm})
-
-	mod, ok := m.Remove("b")
-	if !ok {
-		t.Fatal("expected to remove 'b'")
-	}
-	if mod == nil {
-		t.Fatal("expected non-nil module")
-	}
-
-	keys := m.Keys()
-	if len(keys) != 2 {
-		t.Fatalf("expected 2 keys, got %d", len(keys))
-	}
-
-	// Verify 'b' is gone
-	_, ok = m.Get("b")
-	if ok {
-		t.Error("expected 'b' to be removed")
-	}
-
-	// Remove nonexistent
-	_, ok = m.Remove("nonexistent")
-	if ok {
-		t.Error("expected false for nonexistent key")
-	}
-}
-
 func TestModuleMapLen(t *testing.T) {
 	m := NewModuleMap()
 	if m.Len() != 0 {

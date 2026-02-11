@@ -15,27 +15,29 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 
 	var result []byte
 
-	// Write magic (latest version)
-	magic := LatestVersion.ToMagic()
+	// Write magic for the archive's version
+	magic := e.version.ToMagic()
 	result = append(result, magic[:]...)
 
-	// Build options header
-	optionsHeaderContent := []byte{
-		0, byte(checksum), // Checksum type
-		1, checksumSize, // Checksum size
+	// Write options header (V2.2+)
+	if e.version.SupportsOptions() {
+		optionsHeaderContent := []byte{
+			0, byte(checksum), // Checksum type
+			1, checksumSize, // Checksum size
+		}
+
+		// Write options header length
+		optionsHeaderLenBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(optionsHeaderLenBytes, uint32(len(optionsHeaderContent)))
+		result = append(result, optionsHeaderLenBytes...)
+
+		// Write options header content
+		result = append(result, optionsHeaderContent...)
+
+		// Write options header hash
+		optionsHash := checksum.Hash(optionsHeaderContent)
+		result = append(result, optionsHash...)
 	}
-
-	// Write options header length
-	optionsHeaderLenBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(optionsHeaderLenBytes, uint32(len(optionsHeaderContent)))
-	result = append(result, optionsHeaderLenBytes...)
-
-	// Write options header content
-	result = append(result, optionsHeaderContent...)
-
-	// Write options header hash
-	optionsHash := checksum.Hash(optionsHeaderContent)
-	result = append(result, optionsHash...)
 
 	// Build modules header, sources, and source maps
 	var modulesHeader []byte
@@ -110,9 +112,9 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 		}
 	}
 
-	// Add npm snapshot entries if present
+	// Add npm snapshot entries if present (V2.1+)
 	var npmBytes []byte
-	if e.npmSnapshot != nil {
+	if e.npmSnapshot != nil && e.version.SupportsNpm() {
 		// Sort packages by ID for determinism
 		packages := make([]*NpmPackage, len(e.npmSnapshot.Packages))
 		copy(packages, e.npmSnapshot.Packages)
@@ -188,12 +190,14 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 	modulesHash := checksum.Hash(modulesHeader)
 	result = append(result, modulesHash...)
 
-	// Write npm section
-	npmLenBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(npmLenBytes, uint32(len(npmBytes)))
-	result = append(result, npmLenBytes...)
-	result = append(result, npmBytes...)
-	result = append(result, checksum.Hash(npmBytes)...)
+	// Write npm section (V2.1+)
+	if e.version.SupportsNpm() {
+		npmLenBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(npmLenBytes, uint32(len(npmBytes)))
+		result = append(result, npmLenBytes...)
+		result = append(result, npmBytes...)
+		result = append(result, checksum.Hash(npmBytes)...)
+	}
 
 	// Write sources section
 	sourcesLenBytes := make([]byte, 4)

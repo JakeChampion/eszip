@@ -259,13 +259,14 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 		if read+4 > len(content) {
 			return nil, nil, errInvalidV2Header("specifier len")
 		}
-		specifierLen := int(binary.BigEndian.Uint32(content[read : read+4]))
+		specifierLenU := binary.BigEndian.Uint32(content[read : read+4])
 		read += 4
 
 		// Read specifier
-		if read+specifierLen > len(content) {
+		if specifierLenU > uint32(len(content)-read) {
 			return nil, nil, errInvalidV2Header("specifier")
 		}
+		specifierLen := int(specifierLenU)
 		specifier := string(content[read : read+specifierLen])
 		read += specifierLen
 
@@ -333,12 +334,13 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 			if read+4 > len(content) {
 				return nil, nil, errInvalidV2Header("target len")
 			}
-			targetLen := int(binary.BigEndian.Uint32(content[read : read+4]))
+			targetLenU := binary.BigEndian.Uint32(content[read : read+4])
 			read += 4
 
-			if read+targetLen > len(content) {
+			if targetLenU > uint32(len(content)-read) {
 				return nil, nil, errInvalidV2Header("target")
 			}
+			targetLen := int(targetLenU)
 			target := string(content[read : read+targetLen])
 			read += targetLen
 

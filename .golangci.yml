@@ -1,0 +1,54 @@
+version: "2"
+run:
+  go: "1.23"
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - errcheck
+    - errorlint
+    - exhaustive
+    - goconst
+    - govet
+    - ineffassign
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    revive:
+      severity: warning
+      rules:
+        - name: atomic
+        - name: context-keys-type
+        - name: time-equal
+        - name: if-return
+        - name: superfluous-else
+        - name: errorf
+        - name: waitgroup-by-value
+        - name: dot-imports
+        - name: error-return
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - errcheck
+          - goconst
+        path: (.+)_test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

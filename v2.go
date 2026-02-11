@@ -190,6 +190,13 @@ func (e *EszipV2) Specifiers() []string {
 	return e.modules.Keys()
 }
 
+// NpmSnapshot returns the NPM snapshot without removing it
+func (e *EszipV2) NpmSnapshot() *NpmResolutionSnapshot {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.npmSnapshot
+}
+
 // TakeNpmSnapshot removes and returns the NPM snapshot
 func (e *EszipV2) TakeNpmSnapshot() *NpmResolutionSnapshot {
 	e.mu.Lock()

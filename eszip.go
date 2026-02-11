@@ -70,6 +70,14 @@ func (e *EszipUnion) Specifiers() []string {
 	return nil
 }
 
+// NpmSnapshot returns the NPM snapshot without removing it
+func (e *EszipUnion) NpmSnapshot() *NpmResolutionSnapshot {
+	if e.v2 != nil {
+		return e.v2.NpmSnapshot()
+	}
+	return nil
+}
+
 // TakeNpmSnapshot removes and returns the NPM snapshot
 func (e *EszipUnion) TakeNpmSnapshot() *NpmResolutionSnapshot {
 	if e.v2 != nil {

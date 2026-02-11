@@ -62,6 +62,7 @@ Examples:
 func (a *app) viewCmd() *cobra.Command {
 	var specifier string
 	var showSourceMap bool
+	var listOnly bool
 
 	cmd := &cobra.Command{
 		Use:     "view <archive>",
@@ -83,6 +84,11 @@ func (a *app) viewCmd() *cobra.Command {
 
 				module := archive.GetModule(spec)
 				if module == nil {
+					continue
+				}
+
+				if listOnly {
+					fmt.Fprintln(a.stdout, spec)
 					continue
 				}
 
@@ -118,6 +124,7 @@ func (a *app) viewCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&specifier, "specifier", "s", "", "Show only this specifier")
 	cmd.Flags().BoolVarP(&showSourceMap, "source-map", "m", false, "Show source maps")
+	cmd.Flags().BoolVarP(&listOnly, "list", "l", false, "List specifiers only")
 
 	return cmd
 }

@@ -192,6 +192,26 @@ func TestViewWithSourceMap(t *testing.T) {
 	}
 }
 
+func TestViewListOnly(t *testing.T) {
+	a, stdout := newTestApp()
+	if err := a.run([]string{"view", "-l", testdataPath(t, "redirect.eszip2")}); err != nil {
+		t.Fatalf("view -l failed: %v", err)
+	}
+	out := stdout.String()
+
+	// Should list specifiers, one per line
+	for _, want := range []string{"file:///main.ts", "file:///b.ts"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in list output", want)
+		}
+	}
+
+	// Should NOT contain verbose output
+	if strings.Contains(out, "Kind:") || strings.Contains(out, "===") {
+		t.Error("expected no verbose output with -l flag")
+	}
+}
+
 func TestInfo(t *testing.T) {
 	a, stdout := newTestApp()
 	if err := a.run([]string{"info", testdataPath(t, "redirect.eszip2")}); err != nil {

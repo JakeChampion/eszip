@@ -130,9 +130,35 @@ func (e *EszipV1) Specifiers() []string {
 	return specs
 }
 
-// IntoBytes serializes the V1 eszip to JSON
+// IntoBytes serializes the V1 eszip to JSON.
+// The output reflects any mutations made via TakeSource.
 func (e *EszipV1) IntoBytes() ([]byte, error) {
-	return json.Marshal(e)
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	modules := make(map[string]json.RawMessage, len(e.parsedModules))
+	for specifier, info := range e.parsedModules {
+		var raw json.RawMessage
+		var err error
+		if info.isRedirect {
+			raw, err = json.Marshal(v1ModuleInfoJSON{Redirect: &info.redirect})
+		} else {
+			raw, err = json.Marshal(v1ModuleInfoJSON{Source: info.source})
+		}
+		if err != nil {
+			return nil, err
+		}
+		modules[specifier] = raw
+	}
+
+	out := struct {
+		Version uint32                     `json:"version"`
+		Modules map[string]json.RawMessage `json:"modules"`
+	}{
+		Version: e.Version,
+		Modules: modules,
+	}
+	return json.Marshal(out)
 }
 
 // v1ModuleInner implements moduleInner for V1

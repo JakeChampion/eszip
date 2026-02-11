@@ -872,6 +872,21 @@ func TestSourceSlotSetReadyThenGet(t *testing.T) {
 	}
 }
 
+func TestSourceSlotSetReadyIdempotent(t *testing.T) {
+	slot := NewPendingSourceSlot(0, 5)
+	slot.SetReady([]byte("first"))
+	// Second call must not panic (closing an already-closed channel).
+	slot.SetReady([]byte("second"))
+
+	data, err := slot.Get(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(data) != "first" {
+		t.Errorf("expected 'first', got %q", string(data))
+	}
+}
+
 func TestV2TakeSourceMap(t *testing.T) {
 	ctx := context.Background()
 

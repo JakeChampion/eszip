@@ -42,7 +42,10 @@ func (e *EszipUnion) GetModule(specifier string) *Module {
 	if e.v1 != nil {
 		return e.v1.GetModule(specifier)
 	}
-	return e.v2.GetModule(specifier)
+	if e.v2 != nil {
+		return e.v2.GetModule(specifier)
+	}
+	return nil
 }
 
 // GetImportMap returns the import map module for the given specifier
@@ -50,7 +53,10 @@ func (e *EszipUnion) GetImportMap(specifier string) *Module {
 	if e.v1 != nil {
 		return e.v1.GetImportMap(specifier)
 	}
-	return e.v2.GetImportMap(specifier)
+	if e.v2 != nil {
+		return e.v2.GetImportMap(specifier)
+	}
+	return nil
 }
 
 // Specifiers returns all module specifiers
@@ -58,15 +64,18 @@ func (e *EszipUnion) Specifiers() []string {
 	if e.v1 != nil {
 		return e.v1.Specifiers()
 	}
-	return e.v2.Specifiers()
+	if e.v2 != nil {
+		return e.v2.Specifiers()
+	}
+	return nil
 }
 
 // TakeNpmSnapshot removes and returns the NPM snapshot
 func (e *EszipUnion) TakeNpmSnapshot() *NpmResolutionSnapshot {
-	if e.v1 != nil {
-		return nil
+	if e.v2 != nil {
+		return e.v2.TakeNpmSnapshot()
 	}
-	return e.v2.TakeNpmSnapshot()
+	return nil
 }
 
 // Parse parses an eszip archive from the given reader.

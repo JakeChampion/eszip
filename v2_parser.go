@@ -108,7 +108,11 @@ func parseV2WithVersion(_ context.Context, version EszipVersion, br *bufio.Reade
 			if off > maxSectionSize || ln > maxSectionSize {
 				return nil, nil, errInvalidV2Header(fmt.Sprintf("source offset/length out of range for %s", specifier))
 			}
-			sourceOffsets[int(off)] = sourceOffsetEntry{
+			key := int(off)
+			if existing, dup := sourceOffsets[key]; dup {
+				return nil, nil, errInvalidV2Header(fmt.Sprintf("duplicate source offset %d (%s and %s)", key, existing.specifier, specifier))
+			}
+			sourceOffsets[key] = sourceOffsetEntry{
 				length:    int(ln),
 				specifier: specifier,
 			}
@@ -120,7 +124,11 @@ func parseV2WithVersion(_ context.Context, version EszipVersion, br *bufio.Reade
 			if off > maxSectionSize || ln > maxSectionSize {
 				return nil, nil, errInvalidV2Header(fmt.Sprintf("source map offset/length out of range for %s", specifier))
 			}
-			sourceMapOffsets[int(off)] = sourceOffsetEntry{
+			key := int(off)
+			if existing, dup := sourceMapOffsets[key]; dup {
+				return nil, nil, errInvalidV2Header(fmt.Sprintf("duplicate source map offset %d (%s and %s)", key, existing.specifier, specifier))
+			}
+			sourceMapOffsets[key] = sourceOffsetEntry{
 				length:    int(ln),
 				specifier: specifier,
 			}
@@ -377,7 +385,7 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 	return modules, npmSpecifiers, nil
 }
 
-func loadSources(_ context.Context, br *bufio.Reader, eszip *EszipV2, options Options, sourceOffsets, sourceMapOffsets map[int]sourceOffsetEntry) error {
+func loadSources(ctx context.Context, br *bufio.Reader, eszip *EszipV2, options Options, sourceOffsets, sourceMapOffsets map[int]sourceOffsetEntry) error {
 	getSlot := func(specifier string, isSourceMap bool) *SourceSlot {
 		mod, ok := eszip.modules.Get(specifier)
 		if !ok {
@@ -415,14 +423,14 @@ func loadSources(_ context.Context, br *bufio.Reader, eszip *EszipV2, options Op
 		}
 	}
 
-	if err := loadSection(br, options, sourceOffsets, func(specifier string) *SourceSlot {
+	if err := loadSection(ctx, br, options, sourceOffsets, func(specifier string) *SourceSlot {
 		return getSlot(specifier, false)
 	}); err != nil {
 		resolvePendingSlots()
 		return err
 	}
 
-	if err := loadSection(br, options, sourceMapOffsets, func(specifier string) *SourceSlot {
+	if err := loadSection(ctx, br, options, sourceMapOffsets, func(specifier string) *SourceSlot {
 		return getSlot(specifier, true)
 	}); err != nil {
 		resolvePendingSlots()
@@ -434,7 +442,7 @@ func loadSources(_ context.Context, br *bufio.Reader, eszip *EszipV2, options Op
 	return nil
 }
 
-func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffsetEntry, slotFor func(string) *SourceSlot) error {
+func loadSection(ctx context.Context, br *bufio.Reader, options Options, offsets map[int]sourceOffsetEntry, slotFor func(string) *SourceSlot) error {
 	lenBytes := make([]byte, 4)
 	if _, err := io.ReadFull(br, lenBytes); err != nil {
 		return errIO(err)
@@ -447,6 +455,10 @@ func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffset
 
 	read := 0
 	for read < totalLen {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		entry, ok := offsets[read]
 		if !ok {
 			return errInvalidV2SourceOffset(read)

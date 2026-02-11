@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -73,9 +74,15 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
+			if len(sourceBytes) > math.MaxUint32 {
+				return nil, fmt.Errorf("source too large for %s: %d bytes", specifier, len(sourceBytes))
+			}
 			sourceLen := uint32(len(sourceBytes))
 
 			if sourceLen > 0 {
+				if len(sources) > math.MaxUint32 {
+					return nil, fmt.Errorf("sources section offset overflow: %d bytes", len(sources))
+				}
 				sourceOffset := uint32(len(sources))
 				sources = append(sources, sourceBytes...)
 				sources = append(sources, checksum.Hash(sourceBytes)...)
@@ -92,9 +99,15 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
+			if len(sourceMapBytes) > math.MaxUint32 {
+				return nil, fmt.Errorf("source map too large for %s: %d bytes", specifier, len(sourceMapBytes))
+			}
 			sourceMapLen := uint32(len(sourceMapBytes))
 
 			if sourceMapLen > 0 {
+				if len(sourceMaps) > math.MaxUint32 {
+					return nil, fmt.Errorf("source maps section offset overflow: %d bytes", len(sourceMaps))
+				}
 				sourceMapOffset := uint32(len(sourceMaps))
 				sourceMaps = append(sourceMaps, sourceMapBytes...)
 				sourceMaps = append(sourceMaps, checksum.Hash(sourceMapBytes)...)
@@ -196,6 +209,9 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 	}
 
 	// Write modules header length
+	if len(modulesHeader) > math.MaxUint32 {
+		return nil, fmt.Errorf("modules header too large: %d bytes", len(modulesHeader))
+	}
 	modulesHeaderLenBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(modulesHeaderLenBytes, uint32(len(modulesHeader)))
 	result = append(result, modulesHeaderLenBytes...)
@@ -209,6 +225,9 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 
 	// Write npm section (V2.1+)
 	if version.SupportsNpm() {
+		if len(npmBytes) > math.MaxUint32 {
+			return nil, fmt.Errorf("npm section too large: %d bytes", len(npmBytes))
+		}
 		npmLenBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(npmLenBytes, uint32(len(npmBytes)))
 		result = append(result, npmLenBytes...)
@@ -217,12 +236,18 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 	}
 
 	// Write sources section
+	if len(sources) > math.MaxUint32 {
+		return nil, fmt.Errorf("sources section too large: %d bytes", len(sources))
+	}
 	sourcesLenBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(sourcesLenBytes, uint32(len(sources)))
 	result = append(result, sourcesLenBytes...)
 	result = append(result, sources...)
 
 	// Write source maps section
+	if len(sourceMaps) > math.MaxUint32 {
+		return nil, fmt.Errorf("source maps section too large: %d bytes", len(sourceMaps))
+	}
 	sourceMapsLenBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(sourceMapsLenBytes, uint32(len(sourceMaps)))
 	result = append(result, sourceMapsLenBytes...)

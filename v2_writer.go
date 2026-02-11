@@ -5,6 +5,7 @@ package eszip
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"sort"
 )
 
@@ -152,9 +153,13 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 		})
 
 		for _, rp := range rootPkgs {
+			idx, ok := idToIndex[rp.id]
+			if !ok {
+				return nil, fmt.Errorf("npm root package %q references unknown package ID %q", rp.req, rp.id)
+			}
 			appendString(&modulesHeader, rp.req)
 			modulesHeader = append(modulesHeader, byte(HeaderFrameNpmSpecifier))
-			modulesHeader = appendU32BE(modulesHeader, idToIndex[rp.id])
+			modulesHeader = appendU32BE(modulesHeader, idx)
 		}
 
 		// Write packages to npm bytes
@@ -180,8 +185,12 @@ func (e *EszipV2) IntoBytes(ctx context.Context) ([]byte, error) {
 			})
 
 			for _, dep := range deps {
+				idx, ok := idToIndex[dep.id]
+				if !ok {
+					return nil, fmt.Errorf("npm package %q dependency %q references unknown package ID %q", pkg.ID.String(), dep.req, dep.id)
+				}
 				appendString(&npmBytes, dep.req)
-				npmBytes = appendU32BE(npmBytes, idToIndex[dep.id])
+				npmBytes = appendU32BE(npmBytes, idx)
 			}
 		}
 	}

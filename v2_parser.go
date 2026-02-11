@@ -393,15 +393,45 @@ func loadSources(_ context.Context, br *bufio.Reader, eszip *EszipV2, options Op
 		return data.Source
 	}
 
+	// resolvePendingSlots unblocks any source slots that were never loaded
+	// by setting them to ready with nil data, preventing callers from
+	// blocking forever on Get().
+	resolvePendingSlots := func() {
+		for _, specifier := range eszip.modules.Keys() {
+			mod, ok := eszip.modules.Get(specifier)
+			if !ok {
+				continue
+			}
+			data, ok := mod.(*ModuleData)
+			if !ok {
+				continue
+			}
+			if data.Source.State() == SourceSlotPending {
+				data.Source.SetReady(nil)
+			}
+			if data.SourceMap.State() == SourceSlotPending {
+				data.SourceMap.SetReady(nil)
+			}
+		}
+	}
+
 	if err := loadSection(br, options, sourceOffsets, func(specifier string) *SourceSlot {
 		return getSlot(specifier, false)
 	}); err != nil {
+		resolvePendingSlots()
 		return err
 	}
 
-	return loadSection(br, options, sourceMapOffsets, func(specifier string) *SourceSlot {
+	if err := loadSection(br, options, sourceMapOffsets, func(specifier string) *SourceSlot {
 		return getSlot(specifier, true)
-	})
+	}); err != nil {
+		resolvePendingSlots()
+		return err
+	}
+
+	// Even on success, resolve any slots that weren't matched by offsets
+	resolvePendingSlots()
+	return nil
 }
 
 func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffsetEntry, slotFor func(string) *SourceSlot) error {

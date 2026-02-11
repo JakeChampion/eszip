@@ -21,8 +21,8 @@ func (e *EszipV2) IntoBytes() ([]byte, error) {
 
 	// Build options header
 	optionsHeaderContent := []byte{
-		0, byte(checksum),     // Checksum type
-		1, byte(checksumSize), // Checksum size
+		0, byte(checksum), // Checksum type
+		1, checksumSize, // Checksum size
 	}
 
 	// Write options header length

@@ -86,7 +86,9 @@ Options:`)
 		fs.PrintDefaults()
 	}
 
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	if fs.NArg() < 1 {
 		fs.Usage()
 		return fmt.Errorf("archive path required")
@@ -155,7 +157,9 @@ Options:`)
 		fs.PrintDefaults()
 	}
 
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	ctx := context.Background()
 
@@ -242,7 +246,9 @@ Examples:
   eszip create -checksum none -o app.eszip2 *.js`)
 	}
 
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	if fs.NArg() < 1 {
 		fs.Usage()
 		return fmt.Errorf("at least one file required")
@@ -313,7 +319,9 @@ func infoCmd(args []string) error {
 Show information about an eszip archive.`)
 	}
 
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	if fs.NArg() < 1 {
 		fs.Usage()
 		return fmt.Errorf("archive path required")
@@ -384,12 +392,16 @@ Show information about an eszip archive.`)
 	return nil
 }
 
-func loadArchive(ctx context.Context, path string) (*eszip.EszipUnion, error) {
+func loadArchive(ctx context.Context, path string) (_ *eszip.EszipUnion, retErr error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil && retErr == nil {
+			retErr = err
+		}
+	}()
 	return loadArchiveFromReader(ctx, f)
 }
 

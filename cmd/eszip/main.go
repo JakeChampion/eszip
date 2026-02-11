@@ -356,7 +356,11 @@ func (a *app) infoCmd() *cobra.Command {
 				}
 				kindCounts[module.Kind]++
 
-				source, _ := module.Source(ctx)
+				source, err := module.Source(ctx)
+				if err != nil {
+					fmt.Fprintf(a.stderr, "Error getting source for %s: %v\n", spec, err)
+					continue
+				}
 				totalSourceSize += len(source)
 			}
 

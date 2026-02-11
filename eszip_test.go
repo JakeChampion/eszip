@@ -734,7 +734,10 @@ func TestModuleMapInsertFrontExisting(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to find 'b'")
 	}
-	data := mod.(*ModuleData)
+	data, isData := mod.(*ModuleData)
+	if !isData {
+		t.Fatalf("expected *ModuleData, got %T", mod)
+	}
 	if data.Kind != ModuleKindOpaqueData {
 		t.Errorf("expected OpaqueData kind, got %v", data.Kind)
 	}

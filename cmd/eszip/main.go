@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,6 +161,7 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				return err
 			}
 
+			var errCount int
 			for _, spec := range archive.Specifiers() {
 				module := archive.GetModule(spec)
 				if module == nil {
@@ -173,6 +175,7 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				source, err := module.Source(ctx)
 				if err != nil {
 					fmt.Fprintf(a.stderr, "Error getting source for %s: %v\n", spec, err)
+					errCount++
 					continue
 				}
 
@@ -183,13 +186,35 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				filePath := specifierToPath(spec)
 				fullPath := filepath.Join(outputDir, filePath)
 
+				// Guard against path traversal: ensure the resolved
+				// path stays inside the output directory.
+				absOut, err := filepath.Abs(outputDir)
+				if err != nil {
+					fmt.Fprintf(a.stderr, "Error resolving output dir: %v\n", err)
+					errCount++
+					continue
+				}
+				absFull, err := filepath.Abs(fullPath)
+				if err != nil {
+					fmt.Fprintf(a.stderr, "Error resolving path: %v\n", err)
+					errCount++
+					continue
+				}
+				if !strings.HasPrefix(absFull, absOut+string(filepath.Separator)) && absFull != absOut {
+					fmt.Fprintf(a.stderr, "Skipping %s: path escapes output directory\n", spec)
+					errCount++
+					continue
+				}
+
 				if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 					fmt.Fprintf(a.stderr, "Error creating directory: %v\n", err)
+					errCount++
 					continue
 				}
 
 				if err := os.WriteFile(fullPath, source, 0644); err != nil {
 					fmt.Fprintf(a.stderr, "Error writing file: %v\n", err)
+					errCount++
 					continue
 				}
 
@@ -198,10 +223,23 @@ If no archive path is given (or "-" is specified), reads from stdin.`,
 				sourceMap, err := module.SourceMap(ctx)
 				if err == nil && len(sourceMap) > 0 {
 					mapPath := fullPath + ".map"
-					if err := os.WriteFile(mapPath, sourceMap, 0644); err == nil {
+					absMap, err := filepath.Abs(mapPath)
+					if err != nil {
+						fmt.Fprintf(a.stderr, "Error resolving source map path: %v\n", err)
+						errCount++
+					} else if !strings.HasPrefix(absMap, absOut+string(filepath.Separator)) && absMap != absOut {
+						fmt.Fprintf(a.stderr, "Skipping source map for %s: path escapes output directory\n", spec)
+						errCount++
+					} else if err := os.WriteFile(mapPath, sourceMap, 0644); err != nil {
+						fmt.Fprintf(a.stderr, "Error writing source map: %v\n", err)
+						errCount++
+					} else {
 						fmt.Fprintf(a.stdout, "Extracted: %s\n", mapPath)
 					}
 				}
+			}
+			if errCount > 0 {
+				return fmt.Errorf("extraction completed with %d error(s)", errCount)
 			}
 			return nil
 		},
@@ -223,7 +261,8 @@ func (a *app) createCmd() *cobra.Command {
 		Example: `  eszip create -o app.eszip2 main.js utils.js
   eszip create --checksum none -o app.eszip2 *.js`,
 		Args: cobra.MinimumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
 			archive := eszip.NewV2()
 
 			switch checksum {
@@ -257,12 +296,12 @@ func (a *app) createCmd() *cobra.Command {
 					kind = eszip.ModuleKindWasm
 				}
 
-				specifier := "file://" + absPath
+				specifier := (&url.URL{Scheme: "file", Path: absPath}).String()
 				archive.AddModule(specifier, kind, content, nil)
 				fmt.Fprintf(a.stdout, "Added: %s\n", specifier)
 			}
 
-			data, err := archive.IntoBytes()
+			data, err := archive.IntoBytes(ctx)
 			if err != nil {
 				return fmt.Errorf("serializing archive: %w", err)
 			}
@@ -316,18 +355,22 @@ func (a *app) infoCmd() *cobra.Command {
 			fmt.Fprintf(a.stdout, "Modules: %d\n", len(specifiers))
 
 			kindCounts := make(map[eszip.ModuleKind]int)
-			redirectCount := 0
+			otherCount := 0
 			totalSourceSize := 0
 
 			for _, spec := range specifiers {
 				module := archive.GetModule(spec)
 				if module == nil {
-					redirectCount++
+					otherCount++
 					continue
 				}
 				kindCounts[module.Kind]++
 
-				source, _ := module.Source(ctx)
+				source, err := module.Source(ctx)
+				if err != nil {
+					fmt.Fprintf(a.stderr, "Error getting source for %s: %v\n", spec, err)
+					continue
+				}
 				totalSourceSize += len(source)
 			}
 
@@ -335,14 +378,14 @@ func (a *app) infoCmd() *cobra.Command {
 			for kind, count := range kindCounts {
 				fmt.Fprintf(a.stdout, "  %s: %d\n", kind, count)
 			}
-			if redirectCount > 0 {
-				fmt.Fprintf(a.stdout, "  redirects: %d\n", redirectCount)
+			if otherCount > 0 {
+				fmt.Fprintf(a.stdout, "  other (redirects/npm): %d\n", otherCount)
 			}
 
 			fmt.Fprintf(a.stdout, "\nTotal source size: %d bytes\n", totalSourceSize)
 
 			if v2, ok := archive.V2(); ok {
-				snapshot := v2.TakeNpmSnapshot()
+				snapshot := v2.NpmSnapshot()
 				if snapshot != nil {
 					fmt.Fprintf(a.stdout, "\nNPM packages: %d\n", len(snapshot.Packages))
 					fmt.Fprintf(a.stdout, "NPM root packages: %d\n", len(snapshot.RootPackages))

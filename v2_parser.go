@@ -6,8 +6,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 )
+
+// maxSectionSize is the maximum allowed size for any section (256 MB).
+// This prevents excessive memory allocation from malformed or malicious archives.
+const maxSectionSize = 256 << 20
 
 // ParseV2 parses a V2 eszip from a reader.
 // Returns the eszip and a completion function that loads sources in background.
@@ -98,15 +103,33 @@ func parseV2WithVersion(_ context.Context, version EszipVersion, br *bufio.Reade
 		}
 
 		if data.Source.State() == SourceSlotPending && data.Source.Length() > 0 {
-			sourceOffsets[int(data.Source.Offset())] = sourceOffsetEntry{
-				length:    int(data.Source.Length()),
+			off := data.Source.Offset()
+			ln := data.Source.Length()
+			if off > maxSectionSize || ln > maxSectionSize {
+				return nil, nil, errInvalidV2Header(fmt.Sprintf("source offset/length out of range for %s", specifier))
+			}
+			key := int(off)
+			if existing, dup := sourceOffsets[key]; dup {
+				return nil, nil, errInvalidV2Header(fmt.Sprintf("duplicate source offset %d (%s and %s)", key, existing.specifier, specifier))
+			}
+			sourceOffsets[key] = sourceOffsetEntry{
+				length:    int(ln),
 				specifier: specifier,
 			}
 		}
 
 		if data.SourceMap.State() == SourceSlotPending && data.SourceMap.Length() > 0 {
-			sourceMapOffsets[int(data.SourceMap.Offset())] = sourceOffsetEntry{
-				length:    int(data.SourceMap.Length()),
+			off := data.SourceMap.Offset()
+			ln := data.SourceMap.Length()
+			if off > maxSectionSize || ln > maxSectionSize {
+				return nil, nil, errInvalidV2Header(fmt.Sprintf("source map offset/length out of range for %s", specifier))
+			}
+			key := int(off)
+			if existing, dup := sourceMapOffsets[key]; dup {
+				return nil, nil, errInvalidV2Header(fmt.Sprintf("duplicate source map offset %d (%s and %s)", key, existing.specifier, specifier))
+			}
+			sourceMapOffsets[key] = sourceOffsetEntry{
+				length:    int(ln),
 				specifier: specifier,
 			}
 		}
@@ -152,9 +175,10 @@ func parseOptionsHeader(br *bufio.Reader, defaults Options) (Options, error) {
 		switch option {
 		case 0: // Checksum type
 			checksum, ok := ChecksumFromU8(value)
-			if ok {
-				options.Checksum = checksum
+			if !ok {
+				return defaults, errInvalidV22OptionsHeader(fmt.Sprintf("unknown checksum algorithm: %d", value))
 			}
+			options.Checksum = checksum
 		case 1: // Checksum size
 			options.ChecksumSize = value
 		}
@@ -163,6 +187,17 @@ func parseOptionsHeader(br *bufio.Reader, defaults Options) (Options, error) {
 
 	if options.GetChecksumSize() == 0 && options.Checksum != ChecksumNone {
 		return defaults, errInvalidV22OptionsHeader("checksum size must be known")
+	}
+
+	if options.Checksum == ChecksumNone && options.ChecksumSize > 0 {
+		return defaults, errInvalidV22OptionsHeader("checksum size must be 0 when checksum is none")
+	}
+
+	if options.Checksum != ChecksumNone && options.ChecksumSize != 0 &&
+		options.ChecksumSize != options.Checksum.DigestSize() {
+		return defaults, errInvalidV22OptionsHeader(fmt.Sprintf(
+			"checksum size %d does not match digest size %d for algorithm %d",
+			options.ChecksumSize, options.Checksum.DigestSize(), options.Checksum))
 	}
 
 	// If checksum is enabled, validate the options header hash
@@ -188,6 +223,9 @@ func readSection(br *bufio.Reader, options Options) (*Section, error) {
 		return nil, errIO(err)
 	}
 	length := binary.BigEndian.Uint32(lengthBytes)
+	if length > maxSectionSize {
+		return nil, errInvalidV2Header(fmt.Sprintf("section too large: %d bytes", length))
+	}
 
 	// Read content
 	content := make([]byte, length)
@@ -213,6 +251,10 @@ func readSection(br *bufio.Reader, options Options) (*Section, error) {
 }
 
 func readSectionWithSize(br *bufio.Reader, options Options, contentLen int) (*Section, error) {
+	if contentLen > maxSectionSize {
+		return nil, errInvalidV2Header(fmt.Sprintf("section too large: %d bytes", contentLen))
+	}
+
 	// Read content
 	content := make([]byte, contentLen)
 	if _, err := io.ReadFull(br, content); err != nil {
@@ -247,13 +289,14 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 		if read+4 > len(content) {
 			return nil, nil, errInvalidV2Header("specifier len")
 		}
-		specifierLen := int(binary.BigEndian.Uint32(content[read : read+4]))
+		specifierLenU := binary.BigEndian.Uint32(content[read : read+4])
 		read += 4
 
 		// Read specifier
-		if read+specifierLen > len(content) {
+		if specifierLenU > uint32(len(content)-read) {
 			return nil, nil, errInvalidV2Header("specifier")
 		}
+		specifierLen := int(specifierLenU)
 		specifier := string(content[read : read+specifierLen])
 		read += specifierLen
 
@@ -321,12 +364,13 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 			if read+4 > len(content) {
 				return nil, nil, errInvalidV2Header("target len")
 			}
-			targetLen := int(binary.BigEndian.Uint32(content[read : read+4]))
+			targetLenU := binary.BigEndian.Uint32(content[read : read+4])
 			read += 4
 
-			if read+targetLen > len(content) {
+			if targetLenU > uint32(len(content)-read) {
 				return nil, nil, errInvalidV2Header("target")
 			}
+			targetLen := int(targetLenU)
 			target := string(content[read : read+targetLen])
 			read += targetLen
 
@@ -353,7 +397,7 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 	return modules, npmSpecifiers, nil
 }
 
-func loadSources(_ context.Context, br *bufio.Reader, eszip *EszipV2, options Options, sourceOffsets, sourceMapOffsets map[int]sourceOffsetEntry) error {
+func loadSources(ctx context.Context, br *bufio.Reader, eszip *EszipV2, options Options, sourceOffsets, sourceMapOffsets map[int]sourceOffsetEntry) error {
 	getSlot := func(specifier string, isSourceMap bool) *SourceSlot {
 		mod, ok := eszip.modules.Get(specifier)
 		if !ok {
@@ -369,26 +413,64 @@ func loadSources(_ context.Context, br *bufio.Reader, eszip *EszipV2, options Op
 		return data.Source
 	}
 
-	if err := loadSection(br, options, sourceOffsets, func(specifier string) *SourceSlot {
+	// resolvePendingSlots unblocks any source slots that were never loaded
+	// by setting them to ready with nil data, preventing callers from
+	// blocking forever on Get().
+	resolvePendingSlots := func() {
+		for _, specifier := range eszip.modules.Keys() {
+			mod, ok := eszip.modules.Get(specifier)
+			if !ok {
+				continue
+			}
+			data, ok := mod.(*ModuleData)
+			if !ok {
+				continue
+			}
+			if data.Source.State() == SourceSlotPending {
+				data.Source.SetReady(nil)
+			}
+			if data.SourceMap.State() == SourceSlotPending {
+				data.SourceMap.SetReady(nil)
+			}
+		}
+	}
+
+	if err := loadSection(ctx, br, options, sourceOffsets, func(specifier string) *SourceSlot {
 		return getSlot(specifier, false)
 	}); err != nil {
+		resolvePendingSlots()
 		return err
 	}
 
-	return loadSection(br, options, sourceMapOffsets, func(specifier string) *SourceSlot {
+	if err := loadSection(ctx, br, options, sourceMapOffsets, func(specifier string) *SourceSlot {
 		return getSlot(specifier, true)
-	})
+	}); err != nil {
+		resolvePendingSlots()
+		return err
+	}
+
+	// Even on success, resolve any slots that weren't matched by offsets
+	resolvePendingSlots()
+	return nil
 }
 
-func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffsetEntry, slotFor func(string) *SourceSlot) error {
+func loadSection(ctx context.Context, br *bufio.Reader, options Options, offsets map[int]sourceOffsetEntry, slotFor func(string) *SourceSlot) error {
 	lenBytes := make([]byte, 4)
 	if _, err := io.ReadFull(br, lenBytes); err != nil {
 		return errIO(err)
 	}
-	totalLen := int(binary.BigEndian.Uint32(lenBytes))
+	totalLenU := binary.BigEndian.Uint32(lenBytes)
+	if totalLenU > maxSectionSize {
+		return errInvalidV2Header(fmt.Sprintf("source section too large: %d bytes", totalLenU))
+	}
+	totalLen := int(totalLenU)
 
 	read := 0
 	for read < totalLen {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		entry, ok := offsets[read]
 		if !ok {
 			return errInvalidV2SourceOffset(read)
@@ -408,6 +490,11 @@ func loadSection(br *bufio.Reader, options Options, offsets map[int]sourceOffset
 		if slot := slotFor(entry.specifier); slot != nil {
 			slot.SetReady(section.IntoContent())
 		}
+	}
+
+	if read != totalLen {
+		return errInvalidV2Header(fmt.Sprintf(
+			"source section size mismatch: declared %d but read %d", totalLen, read))
 	}
 
 	return nil

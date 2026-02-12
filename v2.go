@@ -121,15 +121,6 @@ type EszipV2 struct {
 	version     EszipVersion
 }
 
-// NewEszipV2 creates a new empty V2 eszip
-func NewEszipV2() *EszipV2 {
-	return &EszipV2{
-		modules: NewModuleMap(),
-		options: DefaultOptionsForVersion(LatestVersion),
-		version: LatestVersion,
-	}
-}
-
 // HasMagic checks if the buffer starts with a V2 magic
 func HasMagic(buffer []byte) bool {
 	if len(buffer) < 8 {
@@ -188,6 +179,13 @@ func (e *EszipV2) getModuleInternal(specifier string, allowJsonc bool) *Module {
 // Specifiers returns all module specifiers
 func (e *EszipV2) Specifiers() []string {
 	return e.modules.Keys()
+}
+
+// NpmSnapshot returns the NPM snapshot without removing it
+func (e *EszipV2) NpmSnapshot() *NpmResolutionSnapshot {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.npmSnapshot
 }
 
 // TakeNpmSnapshot removes and returns the NPM snapshot

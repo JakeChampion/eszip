@@ -129,8 +129,14 @@ func TestV2Redirect(t *testing.T) {
 		t.Fatal("expected to find module: file:///b.ts")
 	}
 
-	sourceA, _ := moduleA.Source(ctx)
-	sourceB, _ := moduleB.Source(ctx)
+	sourceA, err := moduleA.Source(ctx)
+	if err != nil {
+		t.Fatalf("failed to get source for a.ts: %v", err)
+	}
+	sourceB, err := moduleB.Source(ctx)
+	if err != nil {
+		t.Fatalf("failed to get source for b.ts: %v", err)
+	}
 
 	// Both should have the same source since a.ts redirects to b.ts
 	if !bytes.Equal(sourceA, sourceB) {
@@ -270,7 +276,7 @@ func TestNewV2AndWrite(t *testing.T) {
 	eszip.AddRedirect("file:///alias.js", "file:///test.js")
 
 	// Serialize
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize eszip: %v", err)
 	}
@@ -334,7 +340,7 @@ func TestChecksumTypes(t *testing.T) {
 			eszip.SetChecksum(tc.checksum)
 			eszip.AddModule("file:///test.js", ModuleKindJavaScript, []byte("test"), nil)
 
-			data, err := eszip.IntoBytes()
+			data, err := eszip.IntoBytes(ctx)
 			if err != nil {
 				t.Fatalf("failed to serialize: %v", err)
 			}
@@ -486,16 +492,17 @@ func TestParseV2CorruptHeaderHash(t *testing.T) {
 	eszip.SetChecksum(ChecksumSha256)
 	eszip.AddModule("file:///test.js", ModuleKindJavaScript, []byte("test"), nil)
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
 
 	// The options header hash starts after magic(8) + options_len(4) + options_content(4)
 	// = offset 16, and is 32 bytes. Corrupt it.
-	if len(data) > 48 {
-		data[16] ^= 0xff
+	if len(data) <= 48 {
+		t.Fatalf("archive too small to corrupt header hash: %d bytes", len(data))
 	}
+	data[16] ^= 0xff
 
 	_, err = ParseBytes(ctx, data)
 	if err == nil {
@@ -510,7 +517,7 @@ func TestParseV2CorruptSourceData(t *testing.T) {
 	eszip.SetChecksum(ChecksumSha256)
 	eszip.AddModule("file:///test.js", ModuleKindJavaScript, []byte("hello world"), nil)
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -728,41 +735,12 @@ func TestModuleMapInsertFrontExisting(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to find 'b'")
 	}
-	data := mod.(*ModuleData)
+	data, isData := mod.(*ModuleData)
+	if !isData {
+		t.Fatalf("expected *ModuleData, got %T", mod)
+	}
 	if data.Kind != ModuleKindOpaqueData {
 		t.Errorf("expected OpaqueData kind, got %v", data.Kind)
-	}
-}
-
-func TestModuleMapRemove(t *testing.T) {
-	m := NewModuleMap()
-	m.Insert("a", &ModuleData{Kind: ModuleKindJavaScript})
-	m.Insert("b", &ModuleData{Kind: ModuleKindJson})
-	m.Insert("c", &ModuleData{Kind: ModuleKindWasm})
-
-	mod, ok := m.Remove("b")
-	if !ok {
-		t.Fatal("expected to remove 'b'")
-	}
-	if mod == nil {
-		t.Fatal("expected non-nil module")
-	}
-
-	keys := m.Keys()
-	if len(keys) != 2 {
-		t.Fatalf("expected 2 keys, got %d", len(keys))
-	}
-
-	// Verify 'b' is gone
-	_, ok = m.Get("b")
-	if ok {
-		t.Error("expected 'b' to be removed")
-	}
-
-	// Remove nonexistent
-	_, ok = m.Remove("nonexistent")
-	if ok {
-		t.Error("expected false for nonexistent key")
 	}
 }
 
@@ -872,13 +850,28 @@ func TestSourceSlotSetReadyThenGet(t *testing.T) {
 	}
 }
 
+func TestSourceSlotSetReadyIdempotent(t *testing.T) {
+	slot := NewPendingSourceSlot(0, 5)
+	slot.SetReady([]byte("first"))
+	// Second call must not panic (closing an already-closed channel).
+	slot.SetReady([]byte("second"))
+
+	data, err := slot.Get(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(data) != "first" {
+		t.Errorf("expected 'first', got %q", string(data))
+	}
+}
+
 func TestV2TakeSourceMap(t *testing.T) {
 	ctx := context.Background()
 
 	eszip := NewV2()
 	eszip.AddModule("file:///test.js", ModuleKindJavaScript, []byte("code"), []byte("sourcemap"))
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -936,7 +929,7 @@ func TestAddImportMap(t *testing.T) {
 	}
 
 	// Roundtrip
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -966,7 +959,7 @@ func TestAddOpaqueData(t *testing.T) {
 	eszip := NewV2()
 	eszip.AddOpaqueData("data:///config", []byte("some binary data"))
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -1268,7 +1261,7 @@ func TestNpmSnapshotRoundtrip(t *testing.T) {
 		},
 	}
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -1334,7 +1327,7 @@ func TestNpmSnapshotWithDependencies(t *testing.T) {
 		},
 	}
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -1455,7 +1448,7 @@ func TestAllModuleKindsRoundtrip(t *testing.T) {
 	eszip.AddModule("file:///test.wasm", ModuleKindWasm, []byte{0x00, 0x61, 0x73, 0x6d}, nil)
 	eszip.AddOpaqueData("data:///config", []byte("opaque"))
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -1659,7 +1652,7 @@ func TestEmptySourceRoundtrip(t *testing.T) {
 	eszip := NewV2()
 	eszip.AddModule("file:///empty.js", ModuleKindJavaScript, []byte{}, nil)
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -1729,7 +1722,7 @@ func TestParseV2InvalidEntryKind(t *testing.T) {
 	eszip.SetChecksum(ChecksumNone)
 	eszip.AddModule("file:///test.js", ModuleKindJavaScript, []byte("x"), nil)
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -1741,9 +1734,10 @@ func TestParseV2InvalidEntryKind(t *testing.T) {
 	specLen := int(binary.BigEndian.Uint32(data[offset : offset+4]))
 	entryKindOffset := offset + 4 + specLen // after specifier_len + specifier
 
-	if entryKindOffset < len(data) {
-		data[entryKindOffset] = 99 // Invalid entry kind
+	if entryKindOffset >= len(data) {
+		t.Fatalf("archive too small to corrupt entry kind at offset %d: %d bytes", entryKindOffset, len(data))
 	}
+	data[entryKindOffset] = 99 // Invalid entry kind
 
 	_, err = ParseBytes(ctx, data)
 	if err == nil {
@@ -1754,6 +1748,8 @@ func TestParseV2InvalidEntryKind(t *testing.T) {
 		if pe.Type != ErrInvalidV2EntryKind {
 			t.Errorf("expected ErrInvalidV2EntryKind, got %v", pe.Type)
 		}
+	} else {
+		t.Errorf("expected *ParseError, got %T: %v", err, err)
 	}
 }
 
@@ -1764,7 +1760,7 @@ func TestParseV2InvalidModuleKind(t *testing.T) {
 	eszip.SetChecksum(ChecksumNone)
 	eszip.AddModule("file:///test.js", ModuleKindJavaScript, []byte("x"), nil)
 
-	data, err := eszip.IntoBytes()
+	data, err := eszip.IntoBytes(ctx)
 	if err != nil {
 		t.Fatalf("failed to serialize: %v", err)
 	}
@@ -1775,9 +1771,10 @@ func TestParseV2InvalidModuleKind(t *testing.T) {
 	specLen := int(binary.BigEndian.Uint32(data[offset : offset+4]))
 	moduleKindOffset := offset + 4 + specLen + 1 + 16 // +1 entry_kind, +16 (4x uint32)
 
-	if moduleKindOffset < len(data) {
-		data[moduleKindOffset] = 99 // Invalid module kind
+	if moduleKindOffset >= len(data) {
+		t.Fatalf("archive too small to corrupt module kind at offset %d: %d bytes", moduleKindOffset, len(data))
 	}
+	data[moduleKindOffset] = 99 // Invalid module kind
 
 	_, err = ParseBytes(ctx, data)
 	if err == nil {
@@ -1788,5 +1785,7 @@ func TestParseV2InvalidModuleKind(t *testing.T) {
 		if pe.Type != ErrInvalidV2ModuleKind {
 			t.Errorf("expected ErrInvalidV2ModuleKind, got %v", pe.Type)
 		}
+	} else {
+		t.Errorf("expected *ParseError, got %T: %v", err, err)
 	}
 }

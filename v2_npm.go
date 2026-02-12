@@ -176,7 +176,7 @@ func parseNpmString(content []byte, offset int) (string, int, error) {
 	length := binary.BigEndian.Uint32(content[offset : offset+4])
 	offset += 4
 
-	if offset+int(length) > len(content) {
+	if length > uint32(len(content)-offset) {
 		return "", 0, fmt.Errorf("unexpected end of data")
 	}
 

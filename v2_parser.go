@@ -175,9 +175,10 @@ func parseOptionsHeader(br *bufio.Reader, defaults Options) (Options, error) {
 		switch option {
 		case 0: // Checksum type
 			checksum, ok := ChecksumFromU8(value)
-			if ok {
-				options.Checksum = checksum
+			if !ok {
+				return defaults, errInvalidV22OptionsHeader(fmt.Sprintf("unknown checksum algorithm: %d", value))
 			}
+			options.Checksum = checksum
 		case 1: // Checksum size
 			options.ChecksumSize = value
 		}
@@ -190,6 +191,13 @@ func parseOptionsHeader(br *bufio.Reader, defaults Options) (Options, error) {
 
 	if options.Checksum == ChecksumNone && options.ChecksumSize > 0 {
 		return defaults, errInvalidV22OptionsHeader("checksum size must be 0 when checksum is none")
+	}
+
+	if options.Checksum != ChecksumNone && options.ChecksumSize != 0 &&
+		options.ChecksumSize != options.Checksum.DigestSize() {
+		return defaults, errInvalidV22OptionsHeader(fmt.Sprintf(
+			"checksum size %d does not match digest size %d for algorithm %d",
+			options.ChecksumSize, options.Checksum.DigestSize(), options.Checksum))
 	}
 
 	// If checksum is enabled, validate the options header hash
@@ -482,6 +490,11 @@ func loadSection(ctx context.Context, br *bufio.Reader, options Options, offsets
 		if slot := slotFor(entry.specifier); slot != nil {
 			slot.SetReady(section.IntoContent())
 		}
+	}
+
+	if read != totalLen {
+		return errInvalidV2Header(fmt.Sprintf(
+			"source section size mismatch: declared %d but read %d", totalLen, read))
 	}
 
 	return nil

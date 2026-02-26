@@ -568,6 +568,9 @@ func TestSpecifierToPath(t *testing.T) {
 		{"https://example.com/mod.ts", "example.com/mod.ts"},
 		{"http://example.com/mod.ts", "example.com/mod.ts"},
 		{"plain/path.ts", "plain/path.ts"},
+		{"file:///path/to/my%20file.ts", "path/to/my file.ts"},
+		{"https://example.com/some%2Blib/mod.ts", "example.com/some+lib/mod.ts"},
+		{"file:///path/with%2Fencoded%2Fslashes.ts", "path/with/encoded/slashes.ts"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

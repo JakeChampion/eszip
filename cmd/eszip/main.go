@@ -426,5 +426,8 @@ func specifierToPath(specifier string) string {
 		}
 	}
 	path = strings.TrimPrefix(path, "/")
+	if decoded, err := url.PathUnescape(path); err == nil {
+		path = decoded
+	}
 	return path
 }

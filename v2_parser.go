@@ -297,7 +297,7 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 			return nil, nil, errInvalidV2Header("specifier")
 		}
 		specifierLen := int(specifierLenU)
-		specifier := string(content[read : read+specifierLen])
+		specifier := decodeSpecifier(string(content[read : read+specifierLen]))
 		read += specifierLen
 
 		// Read entry kind
@@ -371,7 +371,7 @@ func parseModulesHeader(content []byte, supportsNpm bool) (*ModuleMap, map[strin
 				return nil, nil, errInvalidV2Header("target")
 			}
 			targetLen := int(targetLenU)
-			target := string(content[read : read+targetLen])
+			target := decodeSpecifier(string(content[read : read+targetLen]))
 			read += targetLen
 
 			modules.Insert(specifier, &ModuleRedirect{Target: target})

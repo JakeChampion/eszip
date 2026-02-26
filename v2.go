@@ -4,6 +4,7 @@ package eszip
 
 import (
 	"context"
+	"net/url"
 	"sync"
 )
 
@@ -140,9 +141,17 @@ func (e *EszipV2) GetImportMap(specifier string) *Module {
 	return e.getModuleInternal(specifier, true)
 }
 
+// decodeSpecifier percent-decodes a URL specifier, returning the original if decoding fails.
+func decodeSpecifier(s string) string {
+	if decoded, err := url.PathUnescape(s); err == nil {
+		return decoded
+	}
+	return s
+}
+
 func (e *EszipV2) getModuleInternal(specifier string, allowJsonc bool) *Module {
 	visited := make(map[string]bool)
-	current := specifier
+	current := decodeSpecifier(specifier)
 
 	for {
 		if visited[current] {

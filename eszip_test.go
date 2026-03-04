@@ -1789,3 +1789,78 @@ func TestParseV2InvalidModuleKind(t *testing.T) {
 		t.Errorf("expected *ParseError, got %T: %v", err, err)
 	}
 }
+
+func TestLookupModuleV2_Module(t *testing.T) {
+	e := NewV2()
+	e.AddModule("file:///a.ts", ModuleKindJavaScript, []byte("hello"), nil)
+
+	entry := e.LookupModule("file:///a.ts")
+	if entry == nil {
+		t.Fatal("expected non-nil entry")
+	}
+	m, ok := entry.(*Module)
+	if !ok {
+		t.Fatalf("expected *Module, got %T", entry)
+	}
+	if m.Specifier != "file:///a.ts" {
+		t.Errorf("expected specifier file:///a.ts, got %s", m.Specifier)
+	}
+	if m.Kind != ModuleKindJavaScript {
+		t.Errorf("expected JavaScript kind, got %v", m.Kind)
+	}
+	ctx := context.Background()
+	src, err := m.Source(ctx)
+	if err != nil {
+		t.Fatalf("Source() error: %v", err)
+	}
+	if string(src) != "hello" {
+		t.Errorf("expected source 'hello', got %q", src)
+	}
+}
+
+func TestLookupModuleV2_Redirect(t *testing.T) {
+	e := NewV2()
+	e.AddModule("file:///b.ts", ModuleKindJavaScript, []byte("target"), nil)
+	e.AddRedirect("file:///a.ts", "file:///b.ts")
+
+	entry := e.LookupModule("file:///a.ts")
+	if entry == nil {
+		t.Fatal("expected non-nil entry")
+	}
+	r, ok := entry.(*ModuleRedirect)
+	if !ok {
+		t.Fatalf("expected *ModuleRedirect, got %T", entry)
+	}
+	if r.Target != "file:///b.ts" {
+		t.Errorf("expected target file:///b.ts, got %s", r.Target)
+	}
+}
+
+func TestLookupModuleV2_NotFound(t *testing.T) {
+	e := NewV2()
+
+	entry := e.LookupModule("file:///nope.ts")
+	if entry != nil {
+		t.Fatalf("expected nil, got %T", entry)
+	}
+}
+
+func TestLookupModuleUnion(t *testing.T) {
+	e := NewV2()
+	e.AddRedirect("file:///a.ts", "file:///b.ts")
+	e.AddModule("file:///b.ts", ModuleKindJavaScript, []byte("ok"), nil)
+
+	union := &EszipUnion{v2: e}
+
+	// Should return redirect, not follow it
+	entry := union.LookupModule("file:///a.ts")
+	if _, ok := entry.(*ModuleRedirect); !ok {
+		t.Fatalf("expected *ModuleRedirect from union, got %T", entry)
+	}
+
+	// Direct module lookup
+	entry = union.LookupModule("file:///b.ts")
+	if _, ok := entry.(*Module); !ok {
+		t.Fatalf("expected *Module from union, got %T", entry)
+	}
+}

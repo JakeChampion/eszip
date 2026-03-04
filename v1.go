@@ -114,6 +114,34 @@ func (e *EszipV1) GetModule(specifier string) *Module {
 	}
 }
 
+// LookupModule returns the raw module entry for the given specifier without
+// following redirects. Returns nil if the specifier is not found.
+func (e *EszipV1) LookupModule(specifier string) ModuleEntry {
+	u, err := url.Parse(specifier)
+	if err != nil {
+		return nil
+	}
+	normalized := u.String()
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	info, ok := e.parsedModules[normalized]
+	if !ok {
+		return nil
+	}
+
+	if info.isRedirect {
+		return &ModuleRedirect{Target: info.redirect}
+	}
+
+	return &Module{
+		Specifier: normalized,
+		Kind:      ModuleKindJavaScript,
+		inner:     &v1ModuleInner{eszip: e},
+	}
+}
+
 // GetImportMap returns nil for V1 (V1 never contains import maps)
 func (e *EszipV1) GetImportMap(specifier string) *Module {
 	return nil

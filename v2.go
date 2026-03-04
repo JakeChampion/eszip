@@ -136,6 +136,28 @@ func (e *EszipV2) GetModule(specifier string) *Module {
 	return e.getModuleInternal(specifier, false)
 }
 
+// LookupModule returns the raw module entry for the given specifier without
+// following redirects. Returns nil if the specifier is not found.
+func (e *EszipV2) LookupModule(specifier string) ModuleEntry {
+	current := decodeSpecifier(specifier)
+	mod, ok := e.modules.Get(current)
+	if !ok {
+		return nil
+	}
+	switch m := mod.(type) {
+	case *ModuleData:
+		return &Module{
+			Specifier: current,
+			Kind:      m.Kind,
+			inner:     &v2ModuleInner{eszip: e},
+		}
+	case *ModuleRedirect:
+		return m
+	default:
+		return nil
+	}
+}
+
 // GetImportMap returns the import map module for the given specifier
 func (e *EszipV2) GetImportMap(specifier string) *Module {
 	return e.getModuleInternal(specifier, true)

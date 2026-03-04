@@ -35,12 +35,18 @@ func (k ModuleKind) String() string {
 	}
 }
 
+// ModuleEntry is a sealed interface for module map entries returned by LookupModule.
+// It is implemented by *Module and *ModuleRedirect.
+type ModuleEntry interface{ moduleEntry() }
+
 // Module represents a module in the eszip archive
 type Module struct {
 	Specifier string
 	Kind      ModuleKind
 	inner     moduleInner
 }
+
+func (*Module) moduleEntry() {}
 
 // moduleInner provides access to module sources
 type moduleInner interface {

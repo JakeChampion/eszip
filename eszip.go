@@ -48,6 +48,18 @@ func (e *EszipUnion) GetModule(specifier string) *Module {
 	return nil
 }
 
+// LookupModule returns the raw module entry for the given specifier without
+// following redirects. Returns nil if the specifier is not found.
+func (e *EszipUnion) LookupModule(specifier string) ModuleEntry {
+	if e.v1 != nil {
+		return e.v1.LookupModule(specifier)
+	}
+	if e.v2 != nil {
+		return e.v2.LookupModule(specifier)
+	}
+	return nil
+}
+
 // GetImportMap returns the import map module for the given specifier
 func (e *EszipUnion) GetImportMap(specifier string) *Module {
 	if e.v1 != nil {

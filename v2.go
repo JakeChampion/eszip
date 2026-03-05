@@ -152,7 +152,7 @@ func (e *EszipV2) LookupModule(specifier string) ModuleEntry {
 			inner:     &v2ModuleInner{eszip: e},
 		}
 	case *ModuleRedirect:
-		return m
+		return &ModuleRedirect{Target: m.Target}
 	default:
 		return nil
 	}

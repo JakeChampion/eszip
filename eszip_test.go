@@ -1790,6 +1790,67 @@ func TestParseV2InvalidModuleKind(t *testing.T) {
 	}
 }
 
+func TestLookupModuleV1_Module(t *testing.T) {
+	v1JSON := `{"version":1,"modules":{
+		"https://example.com/a.js":{"Source":{"source":"hello","deps":[]}}
+	}}`
+	e, err := ParseV1([]byte(v1JSON))
+	if err != nil {
+		t.Fatalf("ParseV1 error: %v", err)
+	}
+
+	entry := e.LookupModule("https://example.com/a.js")
+	if entry == nil {
+		t.Fatal("expected non-nil entry")
+	}
+	m, ok := entry.(*Module)
+	if !ok {
+		t.Fatalf("expected *Module, got %T", entry)
+	}
+	if m.Specifier != "https://example.com/a.js" {
+		t.Errorf("expected specifier https://example.com/a.js, got %s", m.Specifier)
+	}
+	if m.Kind != ModuleKindJavaScript {
+		t.Errorf("expected JavaScript kind, got %v", m.Kind)
+	}
+}
+
+func TestLookupModuleV1_Redirect(t *testing.T) {
+	v1JSON := `{"version":1,"modules":{
+		"https://example.com/a.js":{"Redirect":"https://example.com/b.js"},
+		"https://example.com/b.js":{"Source":{"source":"target","deps":[]}}
+	}}`
+	e, err := ParseV1([]byte(v1JSON))
+	if err != nil {
+		t.Fatalf("ParseV1 error: %v", err)
+	}
+
+	entry := e.LookupModule("https://example.com/a.js")
+	if entry == nil {
+		t.Fatal("expected non-nil entry")
+	}
+	r, ok := entry.(*ModuleRedirect)
+	if !ok {
+		t.Fatalf("expected *ModuleRedirect, got %T", entry)
+	}
+	if r.Target != "https://example.com/b.js" {
+		t.Errorf("expected target https://example.com/b.js, got %s", r.Target)
+	}
+}
+
+func TestLookupModuleV1_NotFound(t *testing.T) {
+	v1JSON := `{"version":1,"modules":{}}`
+	e, err := ParseV1([]byte(v1JSON))
+	if err != nil {
+		t.Fatalf("ParseV1 error: %v", err)
+	}
+
+	entry := e.LookupModule("https://example.com/nope.js")
+	if entry != nil {
+		t.Fatalf("expected nil, got %T", entry)
+	}
+}
+
 func TestLookupModuleV2_Module(t *testing.T) {
 	e := NewV2()
 	e.AddModule("file:///a.ts", ModuleKindJavaScript, []byte("hello"), nil)

@@ -33,7 +33,7 @@ type ModuleRedirect struct {
 }
 
 func (ModuleRedirect) isEszipV2Module() {}
-func (*ModuleRedirect) moduleEntry()     {}
+func (ModuleRedirect) moduleEntry() {}
 
 // NpmSpecifierEntry represents an npm specifier entry
 type NpmSpecifierEntry struct {

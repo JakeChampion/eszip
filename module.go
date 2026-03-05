@@ -37,6 +37,7 @@ func (k ModuleKind) String() string {
 
 // ModuleEntry is a sealed interface for module map entries returned by LookupModule.
 // It is implemented by *Module and *ModuleRedirect.
+// Unlike GetModule, LookupModule does not filter out ModuleKindJsonc entries.
 type ModuleEntry interface{ moduleEntry() }
 
 // Module represents a module in the eszip archive

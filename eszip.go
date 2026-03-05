@@ -50,6 +50,7 @@ func (e *EszipUnion) GetModule(specifier string) *Module {
 
 // LookupModule returns the raw module entry for the given specifier without
 // following redirects. Returns nil if the specifier is not found.
+// Unlike GetModule, this does not filter out ModuleKindJsonc entries.
 func (e *EszipUnion) LookupModule(specifier string) ModuleEntry {
 	if e.v1 != nil {
 		return e.v1.LookupModule(specifier)

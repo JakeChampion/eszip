@@ -8,11 +8,23 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 )
 
-// maxSectionSize is the maximum allowed size for any section (256 MB).
-// This prevents excessive memory allocation from malformed or malicious archives.
+// maxSectionSize is the maximum allowed size for any single section that is
+// read into memory in one allocation (256 MB): the options header, the modules
+// header, an individual module's source or source map, and each npm package
+// entry. It guards against a single malformed length prefix triggering a huge
+// allocation.
 const maxSectionSize = 256 << 20
+
+// maxSourcesSectionSize bounds cumulative source offsets and the total length
+// of the concatenated sources (and source maps) sections. Unlike maxSectionSize
+// this is not a single allocation - the sources section is read module by
+// module - so it legitimately grows with the total bundle size and can exceed
+// maxSectionSize. Offsets and lengths are stored as uint32 in the format, so
+// the natural ceiling is the uint32 range.
+const maxSourcesSectionSize = math.MaxUint32
 
 // ParseV2 parses a V2 eszip from a reader.
 // Returns the eszip and a completion function that loads sources in background.
@@ -105,7 +117,7 @@ func parseV2WithVersion(_ context.Context, version EszipVersion, br *bufio.Reade
 		if data.Source.State() == SourceSlotPending && data.Source.Length() > 0 {
 			off := data.Source.Offset()
 			ln := data.Source.Length()
-			if off > maxSectionSize || ln > maxSectionSize {
+			if ln > maxSectionSize || uint64(off)+uint64(ln) > maxSourcesSectionSize {
 				return nil, nil, errInvalidV2Header(fmt.Sprintf("source offset/length out of range for %s", specifier))
 			}
 			key := int(off)
@@ -121,7 +133,7 @@ func parseV2WithVersion(_ context.Context, version EszipVersion, br *bufio.Reade
 		if data.SourceMap.State() == SourceSlotPending && data.SourceMap.Length() > 0 {
 			off := data.SourceMap.Offset()
 			ln := data.SourceMap.Length()
-			if off > maxSectionSize || ln > maxSectionSize {
+			if ln > maxSectionSize || uint64(off)+uint64(ln) > maxSourcesSectionSize {
 				return nil, nil, errInvalidV2Header(fmt.Sprintf("source map offset/length out of range for %s", specifier))
 			}
 			key := int(off)
@@ -460,7 +472,7 @@ func loadSection(ctx context.Context, br *bufio.Reader, options Options, offsets
 		return errIO(err)
 	}
 	totalLenU := binary.BigEndian.Uint32(lenBytes)
-	if totalLenU > maxSectionSize {
+	if uint64(totalLenU) > maxSourcesSectionSize {
 		return errInvalidV2Header(fmt.Sprintf("source section too large: %d bytes", totalLenU))
 	}
 	totalLen := int(totalLenU)
